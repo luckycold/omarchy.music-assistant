@@ -1,0 +1,12 @@
+{
+  "url": "http://192.168.1.1:8095",
+  "token": "PASTE_LONG_LIVED_TOKEN_HERE",
+  "preferredPlayerId": "",
+  "pollIntervalMs": 2000,
+  "searchLimit": 20,
+  "recentLimit": 50,
+  "showSourceBadge": true,
+  "openWebUiPath": "",
+  "installMediaKeys": true,
+  "mprisFallback": true
+}

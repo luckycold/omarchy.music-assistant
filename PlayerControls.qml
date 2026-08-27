@@ -1,0 +1,212 @@
+import QtQuick
+import Quickshell
+import qs.Commons
+import qs.Ui
+
+Item {
+  id: root
+
+  property QtObject bar: null
+  property var activePlayer: null
+  property var activeMedia: null
+  property string imageUrl: ""
+  property string title: ""
+  property string artist: ""
+  property string album: ""
+  property int volume: 100
+  property int elapsed: 0
+  property int duration: 0
+  property bool isPlaying: false
+  property bool shuffleEnabled: false
+  property string repeatMode: "off"
+  property bool isFavorite: false
+
+  signal playPause()
+  signal next()
+  signal previous()
+  signal seek(real positionMs)
+  signal toggleShuffle()
+  signal cycleRepeat()
+  signal favoriteCurrent()
+  signal openWebUI()
+
+  implicitWidth: Style.space(360)
+  implicitHeight: column.implicitHeight
+
+  function formatTime(ms) {
+    if (!ms || ms < 0) return "0:00"
+    var s = Math.floor(ms / 1000)
+    var m = Math.floor(s / 60)
+    var sec = s % 60
+    return m + ":" + (sec < 10 ? "0" : "") + sec
+  }
+
+  Column {
+    id: column
+    anchors.fill: parent
+    spacing: Style.space(8)
+
+    Row {
+      spacing: Style.space(10)
+      width: parent.width
+
+      BorderSurface {
+        width: Style.space(64)
+        height: Style.space(64)
+        radius: Style.spacing.labelGap
+        color: Style.normalFillFor(root.bar.foreground, Color.accent)
+        borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+
+        Image {
+          anchors.fill: parent
+          anchors.margins: Style.space(2)
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          source: root.imageUrl
+          visible: source !== ""
+        }
+
+        Text {
+          anchors.centerIn: parent
+          visible: !root.imageUrl
+          text: "󰝚"
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.displayLarge
+        }
+      }
+
+      Column {
+        spacing: Style.space(2)
+        width: parent.width - Style.space(74)
+
+        Text {
+          text: root.title || "Nothing playing"
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.subtitle
+          font.bold: true
+          elide: Text.ElideRight
+          width: parent.width
+        }
+        Text {
+          text: root.artist
+          color: Qt.darker(root.bar.foreground, 1.3)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          elide: Text.ElideRight
+          width: parent.width
+          visible: text !== ""
+        }
+        Text {
+          text: root.album
+          color: Qt.darker(root.bar.foreground, 1.6)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
+          width: parent.width
+          visible: text !== ""
+        }
+      }
+    }
+
+    Column {
+      width: parent.width
+      spacing: Style.space(2)
+
+      Row {
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: Style.space(4)
+
+        Button {
+          iconText: "󰒮"
+          foreground: root.bar.foreground
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          enabled: root.activePlayer !== null
+          opacity: enabled ? 1.0 : 0.4
+          onClicked: root.previous()
+        }
+        Button {
+          iconText: root.isPlaying ? "󰏤" : "󰐊"
+          foreground: root.bar.foreground
+          horizontalPadding: Style.spacing.panelGap
+          verticalPadding: Style.spacing.controlPaddingY
+          iconSize: Style.font.iconLarge
+          enabled: root.activePlayer !== null
+          opacity: enabled ? 1.0 : 0.4
+          onClicked: root.playPause()
+        }
+        Button {
+          iconText: "󰒭"
+          foreground: root.bar.foreground
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          enabled: root.activePlayer !== null
+          opacity: enabled ? 1.0 : 0.4
+          onClicked: root.next()
+        }
+        Button {
+          iconText: root.shuffleEnabled ? "󰒟" : "󰒞"
+          foreground: root.shuffleEnabled ? root.bar.foreground : Qt.darker(root.bar.foreground, 1.3)
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          opacity: root.activePlayer !== null ? 1.0 : 0.4
+          onClicked: root.toggleShuffle()
+        }
+        Button {
+          iconText: root.repeatMode === "one" ? "󰑘" : (root.repeatMode === "all" ? "󰑖" : "󰑗")
+          foreground: root.repeatMode !== "off" ? root.bar.foreground : Qt.darker(root.bar.foreground, 1.3)
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          opacity: root.activePlayer !== null ? 1.0 : 0.4
+          onClicked: root.cycleRepeat()
+        }
+        Button {
+          iconText: root.isFavorite ? "󰣐" : "󰥂"
+          foreground: root.isFavorite ? root.bar.foreground : Qt.darker(root.bar.foreground, 1.3)
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          opacity: root.activePlayer !== null ? 1.0 : 0.4
+          onClicked: root.favoriteCurrent()
+        }
+        Button {
+          iconText: "󰖟"
+          foreground: root.bar.foreground
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          opacity: root.activePlayer !== null ? 1.0 : 0.4
+          onClicked: root.openWebUI()
+        }
+      }
+
+      PanelSlider {
+        id: progressSlider
+        width: parent.width
+        minimum: 0
+        maximum: root.duration > 0 ? root.duration : 1
+        value: root.elapsed
+        bar: root.bar
+        enabled: root.duration > 0
+        onMoved: root.seek(value)
+      }
+
+      Row {
+        width: parent.width
+        Text {
+          text: formatTime(root.elapsed)
+          color: Qt.darker(root.bar.foreground, 1.3)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+        }
+        Item { width: 1; height: 1 }
+        Text {
+          text: formatTime(root.duration)
+          color: Qt.darker(root.bar.foreground, 1.3)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+        }
+      }
+    }
+  }
+}
