@@ -2,22 +2,39 @@
 
 var counter = 0
 
+// Bash script that reads the bearer token from stdin, writes it to a
+// 0600-mode temp file, runs curl with the Authorization header sourced
+// from that file (-H @file), and removes the file on exit. The token
+// never appears in any process's argv, only on stdin (which is not
+// visible via /proc/PID/cmdline).
+function _buildCurlScript(url, bodyJson, maxTime, includeOutput) {
+  var escapedUrl = url.replace(/'/g, "'\\''")
+  var escapedBody = bodyJson.replace(/'/g, "'\\''")
+  return "set -e\n" +
+    "F=$(mktemp -t ma-auth.XXXXXX)\n" +
+    "chmod 600 \"$F\"\n" +
+    "trap 'rm -f \"$F\"' EXIT\n" +
+    "IFS= read -r token\n" +
+    "printf '%s' \"Authorization: Bearer ${token}\" > \"$F\"\n" +
+    "curl -sS --max-time " + maxTime + " -X POST " +
+    "-H 'Content-Type: application/json' -H '@'\"$F\" " +
+    (includeOutput ? "" : "-o /dev/null ") +
+    "'" + escapedUrl + "/api' " +
+    "-d '" + escapedBody + "'\n"
+}
+
 function buildArgs(url, token, command, args, messageId) {
   var body = {
     message_id: messageId !== undefined ? messageId : "omarchy-" + (counter++),
     command: command,
     args: args || {}
   }
-  return [
-    "curl",
-    "-sS",
-    "--max-time", "10",
-    "-X", "POST",
-    "-H", "Content-Type: application/json",
-    "-H", "Authorization: Bearer " + token,
-    url + "/api",
-    "-d", JSON.stringify(body)
-  ]
+  // Return an object so the caller can pipe the token over stdin instead of
+  // passing it as an argv element.
+  return {
+    script: _buildCurlScript(url, JSON.stringify(body), "10", true),
+    token: token
+  }
 }
 
 function buildPlayArgs(url, token, command, args, messageId) {
@@ -26,17 +43,10 @@ function buildPlayArgs(url, token, command, args, messageId) {
     command: command,
     args: args || {}
   }
-  return [
-    "curl",
-    "-sS",
-    "--max-time", "8",
-    "-o", "/dev/null",
-    "-X", "POST",
-    "-H", "Content-Type: application/json",
-    "-H", "Authorization: Bearer " + token,
-    url + "/api",
-    "-d", JSON.stringify(body)
-  ]
+  return {
+    script: _buildCurlScript(url, JSON.stringify(body), "8", false),
+    token: token
+  }
 }
 
 function isPlaying(player) {

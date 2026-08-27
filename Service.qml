@@ -276,26 +276,39 @@ Item {
     root.refreshState()
   }
 
+  function runMaRequest(proc, payload) {
+    if (!payload) return
+    proc.authToken = payload.token || ""
+    proc.command = [Quickshell.env("SHELL") || "/bin/bash", "-c", payload.script]
+    proc.running = true
+  }
+
   function runFetchPlayers() {
     if (!root.ready) { root.pollInFlight = false; return }
-    var args = MaApi.buildArgs(root.config.url, root.config.token, "players/all", {}, "poll-players")
-    playersProc.command = args
-    playersProc.running = true
+    var payload = MaApi.buildArgs(root.config.url, root.config.token, "players/all", {}, "poll-players")
+    root.runMaRequest(playersProc, payload)
   }
 
   function runFetchQueue(playerId) {
     if (!root.ready || !playerId) { root.pollInFlight = false; return }
-    var args = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = MaApi.buildArgs(root.config.url, root.config.token,
       "player_queues/items",
       { queue_id: playerId, limit: 200, offset: 0 },
       "poll-queue")
-    queueProc.command = args
-    queueProc.running = true
+    root.runMaRequest(queueProc, payload)
   }
 
   Process {
     id: playersProc
     property string outputText: ""
+    property string authToken: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -324,6 +337,14 @@ Item {
 
   Process {
     id: queueProc
+    property string authToken: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -372,9 +393,8 @@ Item {
 
   function refreshPlayersOnly() {
     if (!root.ready) return
-    var args = MaApi.buildArgs(root.config.url, root.config.token, "players/all", {}, "ws-players")
-    playersProc.command = args
-    playersProc.running = true
+    var payload = MaApi.buildArgs(root.config.url, root.config.token, "players/all", {}, "ws-players")
+    root.runMaRequest(playersProc, payload)
   }
 
   function updatePlayModeFromPlayer() {
@@ -406,8 +426,9 @@ Item {
 
   function runAction(command, args, onDone) {
     if (!root.ready) return
-    var argv = MaApi.buildPlayArgs(root.config.url, root.config.token, command, args)
-    actionProc.command = argv
+    var payload = MaApi.buildPlayArgs(root.config.url, root.config.token, command, args)
+    actionProc.authToken = payload.token || ""
+    actionProc.command = [Quickshell.env("SHELL") || "/bin/bash", "-c", payload.script]
     actionProc.onFinished = onDone || null
     actionProc.actionCommand = command
     actionProc.running = true
@@ -415,8 +436,16 @@ Item {
 
   Process {
     id: actionProc
+    property string authToken: ""
     property var onFinished: null
     property string actionCommand: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     onExited: function(code, status) {
       if (root.actionOnExited) root.actionOnExited(code, status)
       if (typeof onFinished === "function") onFinished(code, status)
@@ -562,12 +591,11 @@ Item {
     if (!query) return
     root.searchQuery = query
     var lim = limit || 20
-    var argv = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = MaApi.buildArgs(root.config.url, root.config.token,
       "music/search",
       { search_query: query, limit: lim, media_types: ["track", "album", "artist", "playlist"] },
       "search-" + Date.now())
-    searchProc.command = argv
-    searchProc.running = true
+    root.runMaRequest(searchProc, payload)
   }
 
   function clearSearch() {
@@ -577,6 +605,14 @@ Item {
 
   Process {
     id: searchProc
+    property string authToken: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -593,7 +629,15 @@ Item {
 
   Process {
     id: favProc
+    property string authToken: ""
     property string typeKey: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -614,6 +658,14 @@ Item {
 
   Process {
     id: playlistsProc
+    property string authToken: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -630,6 +682,14 @@ Item {
 
   Process {
     id: recentProc
+    property string authToken: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -646,9 +706,17 @@ Item {
 
   Process {
     id: saveQueueProc
+    property string authToken: ""
     property string phase: ""
     property string name: ""
     property string newPlaylistId: ""
+    stdinEnabled: true
+    onStarted: {
+      if (authToken.length > 0) {
+        write(authToken + "\n")
+        authToken = ""
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -669,10 +737,11 @@ Item {
           root.saveQueueNewId = pid
           var items = root.queue.map(function(it) { return it.uri || it.media_item_uri || "" }).filter(function(u) { return u.length > 0 })
           saveQueueProc.phase = "add"
-          var argv = MaApi.buildArgs(root.config.url, root.config.token,
+          var payload2 = MaApi.buildArgs(root.config.url, root.config.token,
             "music/playlists/add_playlist_tracks", { playlist_id: pid, tracks: items },
             "save-q-add")
-          saveQueueProc.command = argv
+          saveQueueProc.authToken = payload2.token || ""
+          saveQueueProc.command = [Quickshell.env("SHELL") || "/bin/bash", "-c", payload2.script]
           saveQueueProc.running = true
         } catch (e) {
           root.lastError = "save queue parse: " + e.message
@@ -758,38 +827,34 @@ Item {
   function _favFetchNext() {
     if (root._favIndex >= root._favTypes.length) return
     var t = root._favTypes[root._favIndex++]
-    var argv = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = MaApi.buildArgs(root.config.url, root.config.token,
       "music/favorites/" + t, { limit: 50 }, "fav-" + t)
     favProc.typeKey = t
-    favProc.command = argv
-    favProc.running = true
+    root.runMaRequest(favProc, payload)
   }
 
   function refreshPlaylists() {
     if (!root.ready) return
-    var argv = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = MaApi.buildArgs(root.config.url, root.config.token,
       "music/playlists/all", { limit: 100 }, "playlists")
-    playlistsProc.command = argv
-    playlistsProc.running = true
+    root.runMaRequest(playlistsProc, payload)
   }
 
   function refreshRecent() {
     if (!root.ready) return
-    var argv = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = MaApi.buildArgs(root.config.url, root.config.token,
       "music/recently_played_items", { limit: root.config.recentLimit || 50 }, "recent")
-    recentProc.command = argv
-    recentProc.running = true
+    root.runMaRequest(recentProc, payload)
   }
 
   function saveQueueAsPlaylist(name) {
     if (!name || !root.queue || root.queue.length === 0) return
-    var argv = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = MaApi.buildArgs(root.config.url, root.config.token,
       "music/playlists/create_playlist", { name: name }, "save-q-create")
     root.saveQueuePhase = "create"
     saveQueueProc.phase = "create"
     saveQueueProc.name = name
-    saveQueueProc.command = argv
-    saveQueueProc.running = true
+    root.runMaRequest(saveQueueProc, payload)
   }
 
   // ---------------------------------------------------------------- IPC
