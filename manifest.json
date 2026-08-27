@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.manologarciadev.music-assistant",
   "name": "Music Assistant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "manologarciadev",
   "license": "MIT",
   "description": "Control Music Assistant via its JSON-RPC API. Auto-installs Hyprland media key bindings and routes them through MPRIS when other players (YouTube, Spotify) are active.",
