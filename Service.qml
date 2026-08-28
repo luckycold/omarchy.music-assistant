@@ -200,11 +200,16 @@ Item {
   function configSaveScript(path, json) {
     var safePath = path.replace(/'/g, "'\\''")
     var safeJson = json.replace(/'/g, "'\\''")
-    return "set -e\n" +
+    // Restrict umask so the file is owner-readable only (0600). The
+    // temp file gets the same mode; the final mv preserves it.
+    return "umask 077\n" +
+      "set -e\n" +
       "F='" + safePath + "'\n" +
       "T=\"$F.tmp.$$\"\n" +
       "printf '%s\\n' '" + safeJson + "' > \"$T\"\n" +
-      "mv -f \"$T\" \"$F\"\n"
+      "chmod 600 \"$T\"\n" +
+      "mv -f \"$T\" \"$F\"\n" +
+      "chmod 600 \"$F\"\n"
   }
 
   function persistConfig() {

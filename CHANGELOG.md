@@ -5,6 +5,11 @@ All notable changes to this plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-08-27
+
+### Security
+- `config.json` is now written with `umask 077` and `chmod 600`, so the file containing the MA bearer token is owner-readable only (was 0644, world-readable). Existing installs: run `chmod 600 ~/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/config.json` once.
+
 ## [1.0.2] - 2026-08-27
 
 ### Security
