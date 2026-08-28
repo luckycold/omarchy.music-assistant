@@ -5,6 +5,15 @@ All notable changes to this plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-08-27
+
+### Security
+- Bound Music Assistant responses to prevent shell-memory exhaustion from a malicious or malfunctioning server (fixes marketplace review finding). Three defense layers:
+  - **Producer cap**: curl `--max-filesize 8388608` (8 MB) errors out with exit 63 if the server returns more.
+  - **Model budgets** (in `MaApi.js`): `MAX_PLAYERS=64`, `MAX_QUEUE_ITEMS=2000`, `MAX_SEARCH_*=50`, `MAX_FAVORITES_PER_TYPE=100`, `MAX_PLAYLISTS=100`, `MAX_RECENT_ITEMS=50`.
+  - **Field bounds** (in `Service.qml`): every assigned QML model maps raw server data through `boundedArray()` / `boundedString()` with `MAX_STRING_LENGTH=500`, so a single oversized item cannot blow up a Repeater.
+- Net effect: a single oversized array or string is sliced / truncated before any QML binding sees it.
+
 ## [1.0.1] - 2026-08-27
 
 ### Security

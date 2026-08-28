@@ -2,11 +2,50 @@
 
 var counter = 0
 
+// Producer-side response cap. curl errors out with exit 63 when the server
+// returns more than this many bytes. Generous for a real Music Assistant
+// payload (a typical /players/all response is < 50 KB) but small enough
+// that a malicious or malfunctioning server cannot exhaust shell memory.
+var MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+
+// Client-side budgets. Applied AFTER parsing JSON, before assigning to
+// QML models, so a single oversized array cannot blow up a Repeater.
+var MAX_PLAYERS = 64
+var MAX_QUEUE_ITEMS = 2000
+var MAX_SEARCH_TRACKS = 50
+var MAX_SEARCH_ALBUMS = 50
+var MAX_SEARCH_ARTISTS = 50
+var MAX_SEARCH_PLAYLISTS = 50
+var MAX_FAVORITES_PER_TYPE = 100
+var MAX_PLAYLISTS = 100
+var MAX_RECENT_ITEMS = 50
+var MAX_STRING_LENGTH = 500
+
+function truncate(s, maxLen) {
+  if (s === null || s === undefined) return s
+  var str = String(s)
+  if (str.length <= maxLen) return str
+  return str.substring(0, maxLen) + "…"
+}
+
+function boundedArray(arr, maxLen) {
+  if (!Array.isArray(arr)) return []
+  if (arr.length <= maxLen) return arr
+  return arr.slice(0, maxLen)
+}
+
+function boundedString(v, maxLen) {
+  if (v === null || v === undefined) return ""
+  return truncate(String(v), maxLen)
+}
+
 // Bash script that reads the bearer token from stdin, writes it to a
 // 0600-mode temp file, runs curl with the Authorization header sourced
 // from that file (-H @file), and removes the file on exit. The token
 // never appears in any process's argv, only on stdin (which is not
-// visible via /proc/PID/cmdline).
+// visible via /proc/PID/cmdline). The --max-filesize flag caps the
+// response body so a malicious or malfunctioning server cannot exhaust
+// shell memory.
 function _buildCurlScript(url, bodyJson, maxTime, includeOutput) {
   var escapedUrl = url.replace(/'/g, "'\\''")
   var escapedBody = bodyJson.replace(/'/g, "'\\''")
@@ -16,7 +55,7 @@ function _buildCurlScript(url, bodyJson, maxTime, includeOutput) {
     "trap 'rm -f \"$F\"' EXIT\n" +
     "IFS= read -r token\n" +
     "printf '%s' \"Authorization: Bearer ${token}\" > \"$F\"\n" +
-    "curl -sS --max-time " + maxTime + " -X POST " +
+    "curl -sS --max-time " + maxTime + " --max-filesize " + MAX_RESPONSE_BYTES + " -X POST " +
     "-H 'Content-Type: application/json' -H '@'\"$F\" " +
     (includeOutput ? "" : "-o /dev/null ") +
     "'" + escapedUrl + "/api' " +

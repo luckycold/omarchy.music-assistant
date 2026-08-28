@@ -364,7 +364,24 @@ Item {
       root.lastError = "players/all returned non-list"
       return
     }
-    root.players = list
+    var bounded = MaApi.boundedArray(list, MaApi.MAX_PLAYERS).map(function(p) {
+      return {
+        player_id: MaApi.boundedString(p.player_id, 100),
+        name: MaApi.boundedString(p.name, 200),
+        available: !!p.available,
+        powered: p.powered === undefined ? true : !!p.powered,
+        playback_state: MaApi.boundedString(p.playback_state, 20),
+        volume_muted: !!p.volume_muted,
+        volume_level: typeof p.volume_level === "number" ? Math.max(0, Math.min(100, p.volume_level)) : null,
+        shuffle_enabled: !!p.shuffle_enabled,
+        repeat_mode: MaApi.boundedString(p.repeat_mode, 20),
+        current_media: p.current_media || null,
+        group_members: Array.isArray(p.group_members) ? MaApi.boundedArray(p.group_members, 16).map(function(g) { return MaApi.boundedString(g, 100) }) : [],
+        hide_in_ui: !!p.hide_in_ui,
+        synced_to: MaApi.boundedString(p.synced_to, 100)
+      }
+    })
+    root.players = bounded
     root.revision = root.revision + 1
     root.connected = true
     root._lastSuccessAt = Date.now()
@@ -378,7 +395,20 @@ Item {
       root.queuePosition = 0
       return
     }
-    var items = Array.isArray(payload) ? payload : (payload.items || [])
+    var raw = Array.isArray(payload) ? payload : (payload.items || [])
+    var items = MaApi.boundedArray(raw, MaApi.MAX_QUEUE_ITEMS).map(function(it) {
+      return {
+        queue_item_id: MaApi.boundedString(it.queue_item_id || it.item_id, 100),
+        uri: MaApi.boundedString(it.uri || it.media_item_uri, 2048),
+        name: MaApi.boundedString(it.name || it.title, 500),
+        artist: MaApi.boundedString(it.artist, 500),
+        album: MaApi.boundedString(it.album, 500),
+        image_url: MaApi.boundedString(it.image_url || it.image, 2048),
+        duration: typeof it.duration === "number" && it.duration >= 0 ? it.duration : 0,
+        track_number: typeof it.track_number === "number" ? it.track_number : null,
+        media_type: MaApi.boundedString(it.media_type, 50)
+      }
+    })
     var pos = (payload && payload.current_item_index !== undefined) ? payload.current_item_index
       : (payload && payload.current_index !== undefined) ? payload.current_index
       : 0
@@ -603,6 +633,37 @@ Item {
     root.searchQuery = ""
   }
 
+  function _boundMediaItem(it) {
+    if (!it) return null
+    return {
+      uri: MaApi.boundedString(it.uri || it.media_item_uri, 2048),
+      name: MaApi.boundedString(it.name || it.title, 500),
+      title: MaApi.boundedString(it.title || it.name, 500),
+      artist: MaApi.boundedString(it.artist, 500),
+      album: MaApi.boundedString(it.album, 500),
+      image_url: MaApi.boundedString(it.image_url || it.image || it.imageUrl, 2048),
+      duration: typeof it.duration === "number" && it.duration >= 0 ? it.duration : 0,
+      track_number: typeof it.track_number === "number" ? it.track_number : null,
+      media_type: MaApi.boundedString(it.media_type, 50)
+    }
+  }
+
+  function _boundSearchResults(raw) {
+    if (!raw || typeof raw !== "object") return null
+    return {
+      tracks: MaApi.boundedArray(raw.tracks || [], MaApi.MAX_SEARCH_TRACKS).map(_boundMediaItem),
+      albums: MaApi.boundedArray(raw.albums || [], MaApi.MAX_SEARCH_ALBUMS).map(_boundMediaItem),
+      artists: MaApi.boundedArray(raw.artists || [], MaApi.MAX_SEARCH_ARTISTS).map(function(a) {
+        return {
+          uri: MaApi.boundedString(a.uri, 2048),
+          name: MaApi.boundedString(a.name, 500),
+          image_url: MaApi.boundedString(a.image_url || a.image, 2048)
+        }
+      }),
+      playlists: MaApi.boundedArray(raw.playlists || [], MaApi.MAX_SEARCH_PLAYLISTS).map(_boundMediaItem)
+    }
+  }
+
   Process {
     id: searchProc
     property string authToken: ""
@@ -618,7 +679,8 @@ Item {
       onStreamFinished: {
         try {
           var payload = JSON.parse(String(searchProc.stdout.text || "{}"))
-          root.searchResults = payload.result || payload
+          var bounded = _boundSearchResults(payload.result || payload)
+          root.searchResults = bounded || root.searchResults
           root.searchRevision = root.searchRevision + 1
         } catch (e) {
           root.lastError = "search parse: " + e.message
@@ -644,8 +706,9 @@ Item {
         try {
           var payload = JSON.parse(String(favProc.stdout.text || "{}"))
           var list = payload.result || payload || []
+          var bounded = MaApi.boundedArray(list, MaApi.MAX_FAVORITES_PER_TYPE).map(_boundMediaItem).filter(function(x) { return x !== null })
           var next = Object.assign({}, root.favorites)
-          next[favProc.typeKey] = Array.isArray(list) ? list : []
+          next[favProc.typeKey] = bounded
           root.favorites = next
           root.favoritesRevision = root.favoritesRevision + 1
         } catch (e) {
@@ -671,7 +734,8 @@ Item {
       onStreamFinished: {
         try {
           var payload = JSON.parse(String(playlistsProc.stdout.text || "{}"))
-          root.playlists = Array.isArray(payload.result) ? payload.result : (Array.isArray(payload) ? payload : [])
+          var list = Array.isArray(payload.result) ? payload.result : (Array.isArray(payload) ? payload : [])
+          root.playlists = MaApi.boundedArray(list, MaApi.MAX_PLAYLISTS).map(_boundMediaItem).filter(function(x) { return x !== null })
           root.playlistsRevision = root.playlistsRevision + 1
         } catch (e) {
           root.lastError = "playlists parse: " + e.message
@@ -695,7 +759,18 @@ Item {
       onStreamFinished: {
         try {
           var payload = JSON.parse(String(recentProc.stdout.text || "{}"))
-          root.recentItems = Array.isArray(payload.result) ? payload.result : []
+          var list = Array.isArray(payload.result) ? payload.result : []
+          root.recentItems = MaApi.boundedArray(list, MaApi.MAX_RECENT_ITEMS).map(function(it) {
+            return {
+              uri: MaApi.boundedString(it.uri, 2048),
+              name: MaApi.boundedString(it.name || it.title, 500),
+              artist: MaApi.boundedString(it.artist, 500),
+              album: MaApi.boundedString(it.album, 500),
+              image_url: MaApi.boundedString(it.image_url, 2048),
+              last_played: MaApi.boundedString(it.last_played, 50),
+              timestamp: typeof it.timestamp === "number" ? it.timestamp : null
+            }
+          })
           root.recentRevision = root.recentRevision + 1
         } catch (e) {
           root.lastError = "recent parse: " + e.message
