@@ -167,7 +167,9 @@ Item {
       "touch \"$F\"\n" +
       "if [ -s \"$F\" ] && [ -n \"$(tail -c 1 \"$F\")\" ]; then echo >> \"$F\"; fi\n" +
       "printf '%s\\n' '" + block + "' >> \"$F\"\n" +
-      "hyprctl reload >/dev/null 2>&1 || true\n"
+      "hyprctl reload >/dev/null 2>&1 || true\n" +
+      // Exit 42 = we just installed (caller shows first-run OSD)
+      "exit 42\n"
   }
 
   Process {
@@ -175,7 +177,15 @@ Item {
     command: [Quickshell.env("SHELL") || "/bin/bash", "-c", root.mediaKeysInstallScript]
     onExited: function(exitCode) {
       if (exitCode === 0) {
-        console.log("[music-assistant] Media key bindings installed (idempotent)")
+        console.log("[music-assistant] Media key bindings: nothing to do (already installed)")
+      } else if (exitCode === 42) {
+        console.log("[music-assistant] Media key bindings installed (first run)")
+        root.showOsd(
+          "Media keys enabled",
+          "media-play",
+          "XF86AudioPlay/Pause/Next/Prev now control Music Assistant. " +
+          "Revert by removing the music-assistant media-keys block in ~/.config/hypr/bindings.lua."
+        )
       } else {
         console.warn("[music-assistant] Failed to install media key bindings: exitCode=" + exitCode)
       }
@@ -408,7 +418,7 @@ Item {
         name: MaApi.boundedString(it.name || it.title, 500),
         artist: MaApi.boundedString(it.artist, 500),
         album: MaApi.boundedString(it.album, 500),
-        image_url: MaApi.boundedString(it.image_url || it.image, 2048),
+        image_url: MaApi.safeImageUrl(it.image_url || it.image, 2048),
         duration: typeof it.duration === "number" && it.duration >= 0 ? it.duration : 0,
         track_number: typeof it.track_number === "number" ? it.track_number : null,
         media_type: MaApi.boundedString(it.media_type, 50)
@@ -646,7 +656,7 @@ Item {
       title: MaApi.boundedString(it.title || it.name, 500),
       artist: MaApi.boundedString(it.artist, 500),
       album: MaApi.boundedString(it.album, 500),
-      image_url: MaApi.boundedString(it.image_url || it.image || it.imageUrl, 2048),
+      image_url: MaApi.safeImageUrl(it.image_url || it.image || it.imageUrl, 2048),
       duration: typeof it.duration === "number" && it.duration >= 0 ? it.duration : 0,
       track_number: typeof it.track_number === "number" ? it.track_number : null,
       media_type: MaApi.boundedString(it.media_type, 50)
@@ -662,7 +672,7 @@ Item {
         return {
           uri: MaApi.boundedString(a.uri, 2048),
           name: MaApi.boundedString(a.name, 500),
-          image_url: MaApi.boundedString(a.image_url || a.image, 2048)
+          image_url: MaApi.safeImageUrl(a.image_url || a.image, 2048)
         }
       }),
       playlists: MaApi.boundedArray(raw.playlists || [], MaApi.MAX_SEARCH_PLAYLISTS).map(_boundMediaItem)
@@ -771,7 +781,7 @@ Item {
               name: MaApi.boundedString(it.name || it.title, 500),
               artist: MaApi.boundedString(it.artist, 500),
               album: MaApi.boundedString(it.album, 500),
-              image_url: MaApi.boundedString(it.image_url, 2048),
+              image_url: MaApi.safeImageUrl(it.image_url, 2048),
               last_played: MaApi.boundedString(it.last_played, 50),
               timestamp: typeof it.timestamp === "number" ? it.timestamp : null
             }
