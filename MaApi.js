@@ -39,6 +39,19 @@ function boundedString(v, maxLen) {
   return truncate(String(v), maxLen)
 }
 
+// Whitelist allowed URL schemes for image (and other fetched) URLs sourced
+// from the Music Assistant server. Rejects file://, javascript:, data:, etc.
+// so a compromised or buggy MA cannot trick QML's Image type into reading
+// arbitrary local files.
+function safeImageUrl(v, maxLen) {
+  if (v === null || v === undefined) return ""
+  var str = String(v).trim()
+  if (str.length === 0) return ""
+  var lower = str.toLowerCase()
+  if (lower.indexOf("http://") !== 0 && lower.indexOf("https://") !== 0) return ""
+  return truncate(str, maxLen)
+}
+
 // Bash script that reads the bearer token from stdin, writes it to a
 // 0600-mode temp file, runs curl with the Authorization header sourced
 // from that file (-H @file), and removes the file on exit. The token
@@ -130,7 +143,8 @@ function trackAlbum(media) {
 }
 
 function trackImageUrl(media) {
-  return (media && media.image_url) ? media.image_url : ""
+  if (!media || !media.image_url) return ""
+  return safeImageUrl(media.image_url, 2048)
 }
 
 function pickActivePlayerId(players, preferredId) {

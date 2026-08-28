@@ -5,6 +5,12 @@ All notable changes to this plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-08-27
+
+### Security / UX
+- Media-key installer now reports first-run via Omarchy's OSD: when bindings were just installed (exit code 42 from the install script), a notification explains what changed and how to revert. Subsequent plugin loads no longer show the OSD because the marker is already present.
+- Image URLs from the MA server are now scheme-whitelisted to `http://` and `https://` via `MaApi.safeImageUrl()`. `file://`, `javascript:`, `data:`, and other schemes are dropped to empty string, so a compromised or buggy MA cannot trick QML `Image` into reading local files or executing scripts.
+
 ## [1.0.3] - 2026-08-27
 
 ### Security

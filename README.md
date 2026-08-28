@@ -184,3 +184,44 @@ Add to your `config.json` to disable auto-installation:
 ### Manual uninstall
 
 Delete the block between the markers in `~/.config/hypr/bindings.lua` and run `hyprctl reload`.
+
+## Security
+
+### Threat model
+
+This plugin runs unsandboxed as part of the user's Omarchy shell process. It assumes:
+
+- **Local user is trusted.** Any local process can call IPC methods
+  (`qs ipc call io.github.manologarciadev.music-assistant playPause`,
+  etc.) and trigger Media Assistant actions. There is no authentication
+  on the IPC surface. If untrusted local code can run as your user,
+  this plugin's actions are not isolated from it.
+
+- **MA server is semi-trusted.** The plugin talks to a Music Assistant
+  server URL configured by the user. All responses are validated:
+  - Strings are length-bounded (≤500 chars) and `image_url` is
+    scheme-whitelisted to `http://`/`https://`.
+  - Arrays are size-bounded per collection (≤64 players, ≤2000 queue
+    items, ≤50 search hits, etc.).
+  - Response body is capped at 8 MB at the transport (`curl
+    --max-filesize`).
+
+### What this plugin will not do
+
+- Run any code from the MA server (`JavaScript` URLs in `image_url` are
+  dropped).
+- Read local files via QML's `Image` type from a compromised MA
+  (`file://` URLs are dropped).
+- Leak the bearer token into any process's argv or `/proc/PID/cmdline`
+  — the token reaches curl via stdin → a 0600-mode temp file → `-H
+  @file`, never via `-H "Authorization: ..."` on the command line.
+
+### File permissions
+
+`config.json` is written with `umask 077` and `chmod 600` so the
+bearer token is owner-readable only. If you have an existing install
+from before this fix, run once:
+
+```sh
+chmod 600 ~/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/config.json
+```
