@@ -5,6 +5,15 @@ All notable changes to this plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-08-28
+
+### Security
+- `configSaveScript()` no longer uses a PID-predicted temp path (`$F.tmp.$$`) which a same-user process could pre-create as a symlink to redirect the token write. The fix:
+  - `mktemp -p "$D" ma-config.XXXXXXXXXX` creates an unpredictable 0600-mode regular file in the same directory as the final config (so `mv` stays atomic).
+  - `exec 3> "$T"` opens the file descriptor before any later path lookup; `printf >&3` writes through the fd, so an attacker racing to replace `$T` with a symlink after `mktemp` cannot redirect the write.
+  - `mv -f "$T" "$F"` is `rename(2)`, atomic on Linux regardless of what `$F` was.
+  - `chmod 600` on the final file in case `$F` pre-existed with broader perms.
+
 ## [1.0.4] - 2026-08-27
 
 ### Security / UX

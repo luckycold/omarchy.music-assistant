@@ -210,13 +210,29 @@ Item {
   function configSaveScript(path, json) {
     var safePath = path.replace(/'/g, "'\\''")
     var safeJson = json.replace(/'/g, "'\\''")
-    // Restrict umask so the file is owner-readable only (0600). The
-    // temp file gets the same mode; the final mv preserves it.
-    return "umask 077\n" +
-      "set -e\n" +
+    // Defense against symlink pre-creation at a predictable path:
+    //   1. mktemp creates a uniquely-named file in the same directory as
+    //      the final config, with mode 0600 from the start (umask 077 +
+    //      mktemp's default permissions). Same directory = atomic rename.
+    //   2. Open the file with exec 3>"$T" *before* any other lookup of
+    //      $T happens. The fd stays bound to the original inode even if
+    //      a same-user attacker races to replace $T with a symlink.
+    //   3. Write through fd 3 (printf >&3), close fd (exec 3>&-).
+    //   4. mv -f: atomic rename(2) on Linux; replaces the destination
+    //      atomically regardless of what the destination was (regular
+    //      file, symlink, missing).
+    //   5. chmod 600 the final file in case the destination already
+    //      existed with broader perms.
+    var lastSlash = path.lastIndexOf("/")
+    var safeDir = (lastSlash >= 0 ? path.substring(0, lastSlash) : ".").replace(/'/g, "'\\''")
+    return "set -e\n" +
+      "umask 077\n" +
+      "D='" + safeDir + "'\n" +
       "F='" + safePath + "'\n" +
-      "T=\"$F.tmp.$$\"\n" +
-      "printf '%s\\n' '" + safeJson + "' > \"$T\"\n" +
+      "T=$(mktemp -p \"$D\" ma-config.XXXXXXXXXX)\n" +
+      "exec 3> \"$T\"\n" +
+      "printf '%s\\n' '" + safeJson + "' >&3\n" +
+      "exec 3>&-\n" +
       "chmod 600 \"$T\"\n" +
       "mv -f \"$T\" \"$F\"\n" +
       "chmod 600 \"$F\"\n"
