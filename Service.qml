@@ -18,7 +18,8 @@ Item {
 
   readonly property string home: Quickshell.env("HOME") || ""
   readonly property string pluginId: "io.github.manologarciadev.music-assistant"
-  readonly property string configPath: home + "/.config/omarchy/plugins/" + pluginId + "/config.json"
+  // Runtime config must live outside Omarchy's watched plugin source tree.
+  readonly property string configPath: (Quickshell.env("XDG_CONFIG_HOME") || home + "/.config") + "/music-assistant/config.json"
 
   // ---------------------------------------------------------------- state
   property var players: []
@@ -109,7 +110,7 @@ Item {
     watchChanges: true
     printErrors: false
     onLoaded: root.applyConfig(text())
-    onFileChanged: root.applyConfig(text())
+    onFileChanged: reload()
     onLoadFailed: function(err) {
       root.configError = "config.json missing or unreadable"
       root.config = ({})

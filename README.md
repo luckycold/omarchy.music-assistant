@@ -7,12 +7,13 @@ control.
 ## Setup
 
 ```sh
-omarchy plugin add https://github.com/manologarciadev/music-assistant.git --enable
+omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --enable
 ```
 
 1. In Music Assistant go to **Settings → Profile** and create a long-lived
    access token.
-2. Copy `config.example.json` to `config.json` in this same directory and
+2. Create `~/.config/music-assistant/` and copy `config.example.json` to
+   `~/.config/music-assistant/config.json` (or `$XDG_CONFIG_HOME/music-assistant/config.json`), then
    edit `url` and `token`:
    ```json
    {
@@ -25,7 +26,7 @@ omarchy plugin add https://github.com/manologarciadev/music-assistant.git --enab
    After saving, restrict permissions since the token grants admin access:
 
    ```bash
-   chmod 600 config.json
+   chmod 600 ~/.config/music-assistant/config.json
    ```
 3. The plugin is auto-discovered. Either restart the shell
    (`omarchy restart shell`) or save `~/.config/omarchy/shell.json` after
