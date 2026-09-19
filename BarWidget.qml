@@ -645,9 +645,9 @@ BarWidget {
                   anchors.horizontalCenter: queuePane.horizontalCenter
                   anchors.bottom: queuePane.bottom
                   anchors.bottomMargin: 2
-                  color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.22)
+                  color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.55)
                   border.width: 1
-                  border.color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.85)
+                  border.color: root.bar.foreground
                   Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
                   Text {
                     anchors.centerIn: parent
