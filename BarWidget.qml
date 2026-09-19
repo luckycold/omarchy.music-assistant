@@ -60,12 +60,7 @@ BarWidget {
   property real popupWidth: 380
   property bool queueExpanded: false
   readonly property int compactPopupHeight: 320
-  readonly property int expandedPopupHeight: {
-    var screenH = 900
-    if (root.QsWindow && root.QsWindow.window)
-      screenH = root.QsWindow.window.height
-    return Math.max(root.compactPopupHeight, Math.min(Math.round(screenH * 0.85), screenH - 96))
-  }
+  readonly property int expandedPopupHeight: Math.max(root.compactPopupHeight, Math.round((popup.availableCardHeight > 0 ? popup.availableCardHeight : 720) * 0.92))
   readonly property int popupBodyHeight: root.queueExpanded ? root.expandedPopupHeight : root.compactPopupHeight
   property string searchFilter: "all"
   property string favFilter: "tracks"
@@ -172,7 +167,7 @@ BarWidget {
     focusTarget: root.popupSection === "search" ? searchInput : popupFocus
     open: root.popupOpen
     contentWidth: popup.fittedContentWidth(Style.space(root.popupWidth))
-    contentHeight: popup.fittedContentHeight(Math.max(sidebar.implicitHeight, root.popupBodyHeight), root.expandedPopupHeight)
+    contentHeight: popup.fittedContentHeight(root.popupBodyHeight)
 
     onOpenChanged: {
       if (!open) root.queueExpanded = false
@@ -213,10 +208,7 @@ BarWidget {
 
       Row {
         id: popupRow
-        height: root.popupBodyHeight
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
+        anchors.fill: parent
         spacing: Style.space(8)
 
         Column {
@@ -520,13 +512,6 @@ BarWidget {
                   }
                   Item { width: 1; height: 1 }
                   Button {
-                    text: root.queueExpanded ? "Collapse" : "Expand"
-                    foreground: root.bar.foreground
-                    horizontalPadding: Style.spacing.controlPaddingX
-                    verticalPadding: Style.spacing.controlPaddingY
-                    onClicked: root.queueExpanded = !root.queueExpanded
-                  }
-                  Button {
                     text: "Clear"
                     foreground: root.bar.foreground
                     horizontalPadding: Style.spacing.controlPaddingX
@@ -540,7 +525,7 @@ BarWidget {
                 ScrollView {
                   id: queueFlick
                   width: parent.width
-                  height: Math.max(Style.space(72), popupRow.height - nowPlayer.implicitHeight - Style.space(64))
+                  height: Math.max(Style.space(72), popupRow.height - nowPlayer.implicitHeight - expandQueueBtn.implicitHeight - Style.space(72))
                   clip: true
                   ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                   ScrollBar.vertical.policy: ScrollBar.AsNeeded
@@ -647,8 +632,18 @@ BarWidget {
                 }
                   }
                 }
+                Button {
+                  id: expandQueueBtn
+                  width: parent.width
+                  iconText: root.queueExpanded ? "󰅃" : "󰅀"
+                  foreground: root.bar.foreground
+                  horizontalPadding: Style.spacing.controlPaddingX
+                  verticalPadding: Style.spacing.controlPaddingY
+                  Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
+                  onClicked: root.queueExpanded = !root.queueExpanded
+                }
               }
-  
+
               // ------------------ Search section
               Column {
                 width: parent.width

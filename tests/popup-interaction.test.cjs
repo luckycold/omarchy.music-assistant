@@ -50,8 +50,10 @@ test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(source, /isFavorite: root\.service \? root\.service\.isFavorite : false/);
   assert.match(queue, /HoverMarquee/);
   assert.match(queue, /hoverEnabled: true/);
-  assert.match(queue, /text: root\.queueExpanded \? "Collapse" : "Expand"/);
-  assert.match(source, /popupBodyHeight/);
+  assert.match(queue, /id: expandQueueBtn/);
+  assert.match(queue, /iconText: root\.queueExpanded \? "󰅃" : "󰅀"/);
+  assert.match(source, /popup.availableCardHeight/);
+  assert.doesNotMatch(source, /text: root\.queueExpanded \? "Collapse" : "Expand"/);
 });
 
 test('overflowing list titles circular-scroll on hover and reset when the hover ends', () => {
