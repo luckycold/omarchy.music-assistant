@@ -1,0 +1,20 @@
+[Unit]
+Description=Music Assistant local web-player MPRIS adapter
+PartOf=omarchy-ma-player.service
+BindsTo=omarchy-ma-player.service
+After=omarchy-ma-player.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/share/omarchy-ma-player/mpris.py
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=10
+UMask=0077
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=omarchy-ma-player.service

@@ -32,12 +32,40 @@ BarWidget {
   property string popupSection: "now"
   property bool popupOpen: false
 
-  onPopupSectionChanged: if (popupSection !== "search") searchFilter = "all"
+  onPopupSectionChanged: {
+    if (popupSection !== "search") searchFilter = "all"
+    activatePopupSection()
+  }
+  onServiceConnectedChanged: if (serviceConnected) activatePopupSection()
+
+  function activatePopupSection() {
+    if (!root.popupOpen) return
+    // Opening starts on Now; data must also load when a sidebar tab is selected.
+    if (root.serviceConnected) {
+      if (root.popupSection === "favorites") root.service.refreshFavorites()
+      else if (root.popupSection === "playlists") root.service.refreshPlaylists()
+      else if (root.popupSection === "recent") root.service.refreshRecent()
+    }
+    Qt.callLater(function() {
+      if (!root.popupOpen) return
+      popupFocus.forceActiveFocus()
+      if (root.popupSection === "search" && root.serviceConnected)
+        searchInput.forceActiveFocus()
+    })
+  }
 
   function close() { popupOpen = false }
   function openSection(s) { popupSection = s; popupOpen = true }
 
   property real maxLabelWidth: 180
+  // Only the title viewport grows; playback and media-source routing are unchanged.
+  readonly property bool fillMediaWidth: setting("fillAvailable", true) === true
+  readonly property real minimumMediaWidth: glyph.implicitWidth + row.spacing + Style.space(14)
+  FlexibleMediaWidth {
+    id: flexWidth
+    widget: root
+    anchorId: String(root.setting("fillAnchor", "omarchy.clock"))
+  }
   property real popupWidth: 380
   property string searchFilter: "all"
   property string favFilter: "tracks"
@@ -68,7 +96,9 @@ BarWidget {
 
     Item {
       id: scrollClip
-      width: Math.min(root.maxLabelWidth, labelText.implicitWidth)
+      width: flexWidth.allocatedWidth >= 0
+        ? Math.max(0, flexWidth.allocatedWidth - root.minimumMediaWidth)
+        : Math.min(root.maxLabelWidth, labelText.implicitWidth)
       height: glyph.height
       clip: true
       anchors.verticalCenter: parent.verticalCenter
@@ -92,6 +122,7 @@ BarWidget {
 
         NumberAnimation on x {
           id: scrollAnim
+          onRunningChanged: if (!running) labelText.x = 0
           running: labelText.needsScroll && !root.popupOpen && !root.bar.vertical
           loops: Animation.Infinite
           duration: Math.max(6000, labelText.implicitWidth * 25)
@@ -134,11 +165,13 @@ BarWidget {
 
   // -------------------------------------------------- popup
 
-  PopupCard {
+  KeyboardPanel {
     id: popup
     anchorItem: root
     bar: root.bar
     owner: root
+    // Layer-shell keyboard focus is managed by the shell's keyboard panel.
+    focusTarget: root.popupSection === "search" ? searchInput : popupFocus
     open: root.popupOpen
     contentWidth: popup.fittedContentWidth(Style.space(root.popupWidth))
     contentHeight: popup.fittedContentHeight(Math.max(sidebar.implicitHeight, 320), 560)
@@ -146,16 +179,8 @@ BarWidget {
     onOpenChanged: {
       if (open && root.service) {
         if (typeof root.service.refreshState === "function") root.service.refreshState()
-        if (root.popupSection === "search") {
-          Qt.callLater(function() {
-            if (searchInput) searchInput.forceActiveFocus()
-          })
-        }
-        if (root.popupSection === "favorites") root.service.refreshFavorites()
-        if (root.popupSection === "playlists") root.service.refreshPlaylists()
-        if (root.popupSection === "recent") root.service.refreshRecent()
+        root.activatePopupSection()
       }
-      if (open) Qt.callLater(function() { popupFocus.forceActiveFocus() })
     }
 
     FocusScope {

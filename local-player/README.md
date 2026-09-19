@@ -1,7 +1,9 @@
 # Production remote local player
 
-Node 22+, npm, Python 3 stdlib, Chromium, systemd user session, and working
-PipeWire/PulseAudio are required. Run as the desktop user, **not root**.
+Node 22+, npm, Python 3 with dbus-python and PyGObject, Chromium, a systemd user
+session/session D-Bus, and working PipeWire/PulseAudio are required. On Arch the
+Python bindings are `python-dbus` and `python-gobject`. Run as the desktop user,
+**not root**.
 
 ```sh
 cd local-player
@@ -12,7 +14,8 @@ npm run check
 
 Installer builds/tests, installs bundles outside the watched plugin tree to
 `~/.local/share/omarchy-ma-player`, installs `~/.local/bin/omarchy-ma-player`
-and `~/.config/systemd/user/omarchy-ma-player.service`, and reloads systemd.
+and the `omarchy-ma-player.service` / `omarchy-ma-mpris.service` user units,
+and reloads systemd. The player starts its MPRIS companion as a dependency.
 It does **not** start/enable playback or edit existing config.
 
 Merge into existing `~/.config/music-assistant/config.json` (retain url/token):
@@ -56,6 +59,21 @@ API results may contain sensitive user data: only status/errors are sanitized.
 Limits: 64 KiB requests, 8 MiB responses, 32 pending RPCs, 30 s remote RPC deadline,
 35 s bridge deadline, 40 s CLI socket timeout. Browser startup/heartbeat watchdog
 is 15 s. Transport establishment and pairing have separate bounded deadlines.
+
+## Normal desktop media controls
+
+The MPRIS companion publishes `org.mpris.MediaPlayer2.MusicAssistant` on the
+user's session bus. It reports only this device's local helper player, using the
+existing authenticated bridge, not the plugin's selected remote speaker.
+Metadata and controls participate in the same desktop media selection as browser
+video. Existing keyboard shortcuts are not replaced.
+
+The companion follows the player service lifecycle and does not own the audio
+process. Its failure must not kill playback. D-Bus properties are cached so the
+UI stays responsive while bounded backend requests execute off the main loop.
+Unavailable local identity/queue fails closed rather than targeting another
+player. A method success indicates the backend accepted the command; playback
+state is subsequently read back, not assumed from that return alone.
 
 ## Runtime/security
 

@@ -32,6 +32,25 @@ omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --en
    (`omarchy restart shell`) or save `~/.config/omarchy/shell.json` after
    adding the widget.
 
+## Adaptive bar width
+
+On the stock horizontal Omarchy bar, the title fills the free space on its side
+of the centered clock instead of stopping at 180px. The allocation is local to
+each monitor and reserves space for fixed widgets. Titles scroll only when they
+still do not fit. No media routing or keyboard bindings are changed.
+
+Set `fillAvailable: false` in this widget's `shell.json` layout entry to use the
+old bounded width. `fillAnchor` defaults to `omarchy.clock`; if changed it must
+match the bar's actual center anchor. Vertical bars or missing anchors fall back
+to the original width. Very narrow bars can still overflow if fixed controls
+alone consume the available space.
+
+`FlexibleMediaWidth.qml` and `MediaWidthAllocator.js` must accompany the widget.
+The allocator traverses only the current bar window's visual slots, never the
+service tree, and does not poll. A native-media clone can use the same allocator;
+the reproducible two-widget bootstrap is maintained in
+[`luckycold/dotfiles`](https://github.com/luckycold/dotfiles/tree/main/bootstrap/omarchy-media-layout).
+
 ## Optional local laptop playback
 
 **Development/testing:** this feature is on `feature/remote-local-playback`.
@@ -207,17 +226,7 @@ other shell components (or external scripts) can call it:
 | `refresh()` | Force an immediate state refresh |
 | `openWebUI()` | Open the MA web UI in the default browser |
 
-Example keybinding in `~/.config/hypr/bindings.lua`:
-
-```lua
-local function ma_playpause()
-  Quickshell.exec("qs", "ipc", "call", "io.github.manologarciadev.music-assistant", "playPause")
-end
-
-local function ma_next()
-  Quickshell.exec("qs", "ipc", "call", "io.github.manologarciadev.music-assistant", "nextTrack")
-end
-```
+For normal desktop media integration, see [Media keys](#media-keys).
 
 ## API commands used
 
@@ -249,6 +258,27 @@ When the popup is open:
 In controller-only mode, on first successful config load, the plugin auto-installs Hyprland bindings for `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, and `XF86AudioPrev` so your keyboard media keys control Music Assistant instead of Omarchy's default MPRIS routing. Local-player mode skips this installer and leaves existing bindings untouched.
 
 The block is appended to `~/.config/hypr/bindings.lua` between unique markers (`-- BEGIN music-assistant media-keys` / `-- END music-assistant media-keys`), is fully idempotent (won't duplicate), and runs `hyprctl reload` to activate. Look for `[music-assistant] Media key bindings installed (idempotent)` in the shell log.
+
+### Local-device media source
+
+The managed local player includes an MPRIS companion. It registers **Music
+Assistant (Laptop)** as a normal desktop media source with track metadata and
+playback controls, alongside browser video and other media applications.
+Omarchy's existing source selection and media shortcuts remain in charge—no
+exclusive play/pause binding is installed.
+
+The companion resolves the local helper's persistent player identity. It never
+uses the speaker selected in the plugin. Selecting a remote speaker therefore
+does not expose that speaker through the laptop's media keys. Stop the local
+helper and its MPRIS companion stops with it.
+
+On default Omarchy bindings, Shift+Play/Pause switches media sources. Normal
+source-selection rules apply when more than one application is playing.
+
+If an earlier development version installed a block marked
+`-- BEGIN music-assistant explicit play-pause`, remove that block through its
+matching END marker from `~/.config/hypr/bindings.lua` and run `hyprctl reload`.
+Those exclusive bindings and their IPC methods are superseded by MPRIS.
 
 ### Opt-out
 

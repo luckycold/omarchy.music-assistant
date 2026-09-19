@@ -1,7 +1,7 @@
 [Unit]
 Description=Music Assistant private local web player
 After=network-online.target
-Wants=network-online.target
+Wants=network-online.target omarchy-ma-mpris.service
 StartLimitIntervalSec=0
 
 [Service]
