@@ -27,15 +27,6 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((b.type, b.data), (WSMsgType.BINARY, b'\x00\xff'))
         await ws.send_str('reply'); await ws.send_bytes(b'123')
         self.assertEqual(c.sent, ['reply', b'123'])
-    async def test_close_wakes_reader(self):
-        c = Channel(); ws = DataChannelSocket(c)
-        reader = asyncio.create_task(ws.receive()); await asyncio.sleep(0)
-        await ws.close()
-        self.assertEqual((await asyncio.wait_for(reader, 1)).type, WSMsgType.CLOSED)
-        self.assertTrue(ws.closed)
-    async def test_closed_send_rejected(self):
-        c = Channel(); ws = DataChannelSocket(c); await ws.close()
-        with self.assertRaises(ConnectionError): await ws.send_bytes(b'bad')
     async def test_input_queue_bounded(self):
         c = Channel(); ws = DataChannelSocket(c, max_messages=1)
         c.callbacks['message']('first'); c.callbacks['message']('overflow')

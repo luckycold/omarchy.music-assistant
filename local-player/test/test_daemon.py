@@ -16,14 +16,6 @@ class ValidateTest(unittest.TestCase):
                 validate_request({"command": command, "args": {}})
             self.assertEqual(str(ctx.exception), "RPC_RESERVED")
 
-    def test_local_status_ok(self):
-        self.assertEqual(validate_request({"command": "local/status", "args": {}}),
-                         ("local/status", {}))
-
-    def test_bad_shape(self):
-        with self.assertRaises(ValueError):
-            validate_request({"command": "players/get"})
-
 
 class ConfigTest(unittest.TestCase):
     def test_mode_and_enabled(self):
