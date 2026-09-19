@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Private one-line local-player bridge. No token is read by this CLI."""
+import json, os, socket, stat, subprocess, sys
+from pathlib import Path
+MAX_REQUEST=65536
+MAX_RESPONSE=8*1024*1024
+
+def emit(value,code=0):
+ print(json.dumps(value,separators=(',',':')))
+ return code
+
+def main():
+ if len(sys.argv)!=2:return emit({'error':'USAGE'},2)
+ command=sys.argv[1]
+ if command in ('start','stop','restart','enable','disable'):
+  try:
+   result=subprocess.run(['systemctl','--user',command,'omarchy-ma-player.service'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
+   return emit({'result':result.returncode==0} if result.returncode==0 else {'error':'SERVICE_FAILED'},0 if result.returncode==0 else 1)
+  except (OSError,subprocess.TimeoutExpired):return emit({'error':'SERVICE_FAILED'},1)
+ if command not in ('status','request'):return emit({'error':'USAGE'},2)
+ if command=='request':
+  try:
+   line=sys.stdin.buffer.readline(MAX_REQUEST+1)
+   if len(line)>MAX_REQUEST:raise ValueError()
+   request=json.loads(line)
+   if not isinstance(request,dict) or not isinstance(request.get('command'),str) or not isinstance(request.get('args'),dict):raise ValueError()
+  except (ValueError,UnicodeError):return emit({'error':'BAD_REQUEST'},1)
+ else:request={'command':'local/status','args':{}}
+ state=Path.home()/'.local/state/music-assistant-player'
+ try:
+  for path,kind in ((state,'dir'),(state/'player.sock','socket')):
+   s=path.lstat()
+   if s.st_uid!=os.getuid() or s.st_mode&0o077 or (not stat.S_ISDIR(s.st_mode) if kind=='dir' else not stat.S_ISSOCK(s.st_mode)):return emit({'error':'CONFIG_PRIVATE'},1)
+  with socket.socket(socket.AF_UNIX) as client:
+   client.settimeout(40);client.connect(str(state/'player.sock'));client.sendall(json.dumps(request).encode()+b'\n');client.shutdown(socket.SHUT_WR)
+   data=bytearray()
+   while b'\n' not in data:
+    block=client.recv(65536)
+    if not block:raise OSError()
+    data.extend(block)
+    if len(data)>MAX_RESPONSE+1:return emit({'error':'RPC_LIMIT'},1)
+   reply=json.loads(data.split(b'\n')[0])
+   if not isinstance(reply,dict):raise ValueError()
+   return emit(reply.get('result',{}) if command=='status' and 'result' in reply else reply,1 if 'error' in reply else 0)
+ except (FileNotFoundError,ConnectionRefusedError):
+  return emit({'phase':'stopped','ready':False,'playerId':None,'playing':False,'error':None} if command=='status' else {'error':'NOT_READY'},0 if command=='status' else 1)
+ except (OSError,ValueError):return emit({'error':'BRIDGE_CLOSED'},1)
+if __name__=='__main__':sys.exit(main())

@@ -53,6 +53,7 @@ BarWidget {
     spacing: Style.space(6)
 
     Text {
+      textFormat: Text.PlainText
       id: glyph
       anchors.verticalCenter: parent.verticalCenter
       text: root.playIcon
@@ -74,6 +75,7 @@ BarWidget {
       visible: !root.bar.vertical
 
       Text {
+        textFormat: Text.PlainText
         id: labelText
         text: root.serviceReady
           ? (root.title ? (root.title + (root.artist ? "  ·  " + root.artist : "")) : (root.hasMedia ? "" : "Nothing playing"))
@@ -250,13 +252,14 @@ BarWidget {
                 padding: Style.space(8)
   
                 Text {
+                  textFormat: Text.PlainText
                   anchors.fill: parent
                   wrapMode: Text.WordWrap
                   color: root.bar.foreground
                   font.family: root.bar.fontFamily
                   font.pixelSize: Style.font.bodySmall
                   text: root.serviceReady
-                    ? ("Connecting to Music Assistant…")
+                    ? (root.service.lastError || "Connecting to Music Assistant…")
                     : ("Music Assistant not configured.\n" + (root.service && root.service.configError ? root.service.configError : ""))
                 }
               }
@@ -268,6 +271,9 @@ BarWidget {
                 visible: root.popupSection === "now"
   
                 PlayerControls {
+                  enabled: root.serviceConnected && root.activePlayer && root.activePlayer.available
+                    && (!root.service.localPlayerSelected || root.service.localPlayerReady)
+                  opacity: enabled ? 1 : 0.4
                   width: parent.width
                   bar: root.bar
                   activePlayer: root.service ? root.service.activePlayer : null
@@ -299,6 +305,66 @@ BarWidget {
                 spacing: Style.space(4)
                 visible: root.popupSection === "players"
   
+                Column {
+                  width: parent.width
+                  spacing: Style.space(6)
+                  visible: root.service && root.service.localPlayerEnabled
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    color: root.bar.foreground
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    text: "Laptop player: " + (root.service ? root.service.localPlayerState.phase : "stopped")
+                      + (root.service && root.service.localPlayerState.error ? " · " + root.service.localPlayerState.error : "")
+                      + (root.service && root.service.playHerePending ? " · waiting to select…" : "")
+                    Accessible.name: text
+                  }
+                  Flow {
+                    width: parent.width
+                    spacing: Style.space(4)
+                    Button {
+                      text: "Start"
+                      foreground: root.bar.foreground
+                      enabled: root.serviceReady && !root.service.localControlBusy && !root.service.localPlayerReady
+                      opacity: enabled ? 1 : 0.4
+                      onClicked: root.service.startLocalPlayer()
+                    }
+                    Button {
+                      text: "Stop"
+                      foreground: root.bar.foreground
+                      enabled: root.serviceReady && !root.service.localControlBusy
+                      opacity: enabled ? 1 : 0.4
+                      onClicked: root.service.stopLocalPlayer()
+                    }
+                    Button {
+                      text: "Restart"
+                      foreground: root.bar.foreground
+                      enabled: root.serviceReady && !root.service.localControlBusy
+                      opacity: enabled ? 1 : 0.4
+                      onClicked: root.service.restartLocalPlayer()
+                    }
+                    Button {
+                      text: "Play here"
+                      foreground: root.bar.foreground
+                      // May start the helper; playback controls remain gated on readiness.
+                      enabled: root.serviceReady && !root.service.localControlBusy && !root.service.playHerePending
+                      opacity: enabled ? 1 : 0.4
+                      onClicked: root.service.playHere()
+                    }
+                  }
+                  Text {
+                    textFormat: Text.PlainText
+                    width: parent.width
+                    text: "Play here selects this laptop without moving another queue."
+                    wrapMode: Text.WordWrap
+                    color: Qt.darker(root.bar.foreground, 1.4)
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+
                 PanelSectionHeader {
                   foreground: root.bar.foreground
                   text: "PLAYERS (" + (root.service ? root.service.players.length : 0) + ")"
@@ -312,7 +378,8 @@ BarWidget {
                     required property var modelData
                     readonly property var player: modelData
                     readonly property bool isActive: root.service && player.player_id === root.service.activePlayerId
-                    readonly property bool available: player.available === true
+                    readonly property bool available: root.serviceConnected && player.available === true
+                      && (player.player_id !== root.service.localPlayerId || root.service.localPlayerReady)
                     readonly property bool playingHere: player.playback_state === "playing"
                     readonly property bool groupPlayer: player.group_members && player.group_members.length > 1
                     readonly property int vol: MaApi.volumePercent(player)
@@ -343,6 +410,7 @@ BarWidget {
                       spacing: Style.space(8)
   
                       Text {
+                        textFormat: Text.PlainText
                         text: playingHere ? "󰏤" : (available ? "󰐊" : "󰂃")
                         color: root.bar.foreground
                         font.family: root.bar.fontFamily
@@ -359,6 +427,7 @@ BarWidget {
                         anchors.verticalCenter: parent.verticalCenter
   
                         Text {
+                          textFormat: Text.PlainText
                           text: playerRow.rowTitle
                           color: root.bar.foreground
                           font.family: root.bar.fontFamily
@@ -368,6 +437,7 @@ BarWidget {
                           width: parent.width
                         }
                         Text {
+                          textFormat: Text.PlainText
                           text: playerRow.rowDetail
                           color: Qt.darker(root.bar.foreground, 1.4)
                           font.family: root.bar.fontFamily
@@ -406,10 +476,12 @@ BarWidget {
                 width: parent.width
                 spacing: Style.space(4)
                 visible: root.popupSection === "queue"
+                enabled: root.serviceConnected
   
                 Row {
                   width: parent.width
                   Text {
+                    textFormat: Text.PlainText
                     text: "QUEUE (" + (root.service ? root.service.queue.length : 0) + ")"
                     color: Qt.darker(root.bar.foreground, 1.3)
                     font.family: root.bar.fontFamily
@@ -456,6 +528,7 @@ BarWidget {
                       spacing: Style.space(8)
   
                       Text {
+                        textFormat: Text.PlainText
                         text: queueRow.modelData.image_url ? "" : (queueRow.isCurrent ? "󰝚" : "")
                         color: root.bar.foreground
                         font.family: root.bar.fontFamily
@@ -479,6 +552,7 @@ BarWidget {
                         spacing: Style.space(1)
                         anchors.verticalCenter: parent.verticalCenter
                         Text {
+                          textFormat: Text.PlainText
                           text: queueRow.modelData.name || queueRow.modelData.title || queueRow.modelData.uri || "?"
                           color: root.bar.foreground
                           font.family: root.bar.fontFamily
@@ -488,6 +562,7 @@ BarWidget {
                           width: parent.width
                         }
                         Text {
+                          textFormat: Text.PlainText
                           text: queueRow.modelData.artist || queueRow.modelData.uri || ""
                           color: Qt.darker(root.bar.foreground, 1.4)
                           font.family: root.bar.fontFamily
@@ -516,6 +591,7 @@ BarWidget {
                 }
   
                 Text {
+                  textFormat: Text.PlainText
                   text: root.service && root.service.queue.length === 0 ? "Queue is empty." : ""
                   color: Qt.darker(root.bar.foreground, 1.4)
                   font.family: root.bar.fontFamily
@@ -529,6 +605,7 @@ BarWidget {
                 width: parent.width
                 spacing: Style.space(6)
                 visible: root.popupSection === "search"
+                enabled: root.serviceConnected
   
                 TextField {
                   id: searchInput
@@ -609,6 +686,7 @@ BarWidget {
                         anchors.centerIn: parent
                         spacing: Style.space(3)
                         Text {
+                          textFormat: Text.PlainText
                           text: modelData.label
                           color: root.bar.foreground
                           font.family: root.bar.fontFamily
@@ -624,6 +702,7 @@ BarWidget {
                           implicitWidth: countLbl.implicitWidth + Style.space(6)
                           implicitHeight: countLbl.implicitHeight + 2
                           Text {
+                            textFormat: Text.PlainText
                             id: countLbl
                             anchors.centerIn: parent
                             text: modelData.count
@@ -725,6 +804,7 @@ BarWidget {
                 }
   
                 Text {
+                  textFormat: Text.PlainText
                   width: parent.width
                   text: {
                     if (!root.service) return ""
@@ -745,6 +825,7 @@ BarWidget {
                 width: parent.width
                 spacing: Style.space(4)
                 visible: root.popupSection === "favorites"
+                enabled: root.serviceConnected
   
                 Row {
                   width: parent.width
@@ -772,6 +853,7 @@ BarWidget {
                         : Border.controlSpec("normal", Qt.darker(root.bar.foreground, 1.4), Color.accent)
   
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: modelData.label
                         color: root.bar.foreground
@@ -813,6 +895,7 @@ BarWidget {
                 }
   
                 Text {
+                  textFormat: Text.PlainText
                   visible: !root.service || !root.service.favorites || !(root.service.favorites[root.favFilter] || []).length
                   width: parent.width
                   text: root.service ? "No " + root.favFilter + " favorites yet." : "Loading…"
@@ -828,6 +911,7 @@ BarWidget {
                 width: parent.width
                 spacing: Style.space(4)
                 visible: root.popupSection === "playlists"
+                enabled: root.serviceConnected
   
                 Component {
                   id: playlistDelegate
@@ -850,6 +934,7 @@ BarWidget {
                 }
   
                 Text {
+                  textFormat: Text.PlainText
                   visible: !root.service || !root.service.playlists || root.service.playlists.length === 0
                   width: parent.width
                   text: root.service ? "No playlists found." : "Loading…"
@@ -865,6 +950,7 @@ BarWidget {
                 width: parent.width
                 spacing: Style.space(4)
                 visible: root.popupSection === "recent"
+                enabled: root.serviceConnected
   
                 Component {
                   id: recentDelegate
@@ -874,7 +960,7 @@ BarWidget {
                     bar: root.bar
                     imageUrl: modelData.image_url || ""
                     title: modelData.name || modelData.title || "?"
-                    subtitle: MaApi.formatRelativeTime(modelData.last_played || modelData.timestamp)
+                    subtitle: modelData.artist || modelData.album || ""
                     showTypeBadge: true
                     showSourceBadge: true
                     onClicked: if (root.service) root.service.playUri(root.service.activePlayerId, modelData.uri)
@@ -887,6 +973,7 @@ BarWidget {
                 }
   
                 Text {
+                  textFormat: Text.PlainText
                   visible: !root.service || !root.service.recentItems || root.service.recentItems.length === 0
                   width: parent.width
                   text: root.service ? "No recent items." : "Loading…"

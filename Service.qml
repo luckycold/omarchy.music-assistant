@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import qs.Commons
 import "MaApi.js" as MaApi
+import "MaData.js" as MaData
 import "ConfigSchema.js" as ConfigSchema
 
 Item {
@@ -24,14 +25,149 @@ Item {
   // ---------------------------------------------------------------- state
   property var players: []
   property string activePlayerId: ""
+  property string activeQueueId: ""
+  property string activeQueuePlayerId: ""
+  property int queueEpoch: 0
   property var queue: []
-  property int queuePosition: 0
+  property int queuePosition: -1
   property int queueRevision: 0
   property var searchResults: null
   property string searchQuery: ""
   property string lastError: ""
   property bool connected: false
   property int revision: 0
+
+  // ------------------------------------------------------- local playback
+  readonly property bool localPlayerEnabled: !!(root.config.localPlayer && root.config.localPlayer.enabled)
+  readonly property string localPlayerExecutable: root.home + "/.local/bin/omarchy-ma-player"
+  property var localPlayerState: ({ phase: "stopped", ready: false, playerId: "", playing: false, error: "" })
+  property string localPlayerId: ""
+  readonly property bool localPlayerReady: root.localPlayerEnabled && root.localPlayerState.ready === true && root.localPlayerId.length > 0
+  // Retain identity while disconnected so media keys cannot jump to another app.
+  readonly property bool localPlayerSelected: root.localPlayerEnabled && root.localPlayerId.length > 0 && root.activePlayerId === root.localPlayerId
+  property bool localControlBusy: false
+  property bool playHerePending: false
+  property int requestEpoch: 0
+
+  function localPlayerStatus() {
+    return JSON.stringify({ enabled: root.localPlayerEnabled, phase: root.localPlayerState.phase,
+      ready: root.localPlayerReady, playerId: root.localPlayerId,
+      playing: root.localPlayerState.playing, error: root.localPlayerState.error,
+      busy: root.localControlBusy, playHerePending: root.playHerePending })
+  }
+
+  function refreshLocalPlayerStatus() {
+    if (!root.ready || !root.localPlayerEnabled || root.localControlBusy || localStatusProc.busy) return
+    localStatusProc.enqueue({ command: [root.localPlayerExecutable, "status"], stdin: "",
+      local: true, statusOnly: true, epoch: root.requestEpoch })
+  }
+
+  function decodeLocalStatus(text, code) {
+    if (code !== 0 || !text || text.length > 16384) throw new Error("HELPER_STATUS_FAILED")
+    var value = JSON.parse(String(text))
+    if (!value || typeof value.ready !== "boolean" || typeof value.phase !== "string") throw new Error("INVALID_STATUS")
+    var id = typeof value.playerId === "string" && /^[A-Za-z0-9_-]{43}$/.test(value.playerId) ? value.playerId : ""
+    var phases = ["idle", "unlocking", "remote-connecting", "authenticating", "opening-sendspin", "sdk-connecting", "pairing", "waiting-player", "ready", "failed", "disconnected", "starting", "reconnecting", "stopped"]
+    return { phase: phases.indexOf(value.phase) >= 0 ? value.phase : "connecting",
+      ready: value.phase === "ready" && value.ready === true && !!id && !value.error, playerId: id, playing: value.playing === true,
+      error: value.error ? "LOCAL_PLAYER_ERROR" : "" }
+  }
+
+  MaRequest {
+    id: localStatusProc
+    handleReply: function(value, context) {
+      var wasReady = root.localPlayerReady
+      root.localPlayerState = value
+      if (value.playerId) root.localPlayerId = value.playerId
+      if (!value.ready && (wasReady || root.connected)) root.requestFailed("LOCAL_PLAYER_NOT_READY")
+      if (value.ready && !wasReady) root.refreshState()
+      root.selectLocalPlayer()
+    }
+    onCompleted: function(code, status, context) {
+      if (code !== 0) {
+        root.localPlayerState = ({ phase: "error", ready: false, playing: false, error: "HELPER_STATUS_FAILED" })
+      }
+    }
+  }
+
+  Timer {
+    interval: 2000
+    repeat: true
+    running: root.ready && root.localPlayerEnabled
+    triggeredOnStart: true
+    onTriggered: root.refreshLocalPlayerStatus()
+  }
+
+  function runLocalControl(verb) {
+    if (!root.ready || !root.localPlayerEnabled) return "LOCAL_PLAYER_DISABLED"
+    if (root.localControlBusy) return "LOCAL_PLAYER_BUSY"
+    if (["start", "stop", "restart", "enable", "disable"].indexOf(verb) < 0) return "INVALID_ACTION"
+    root.localControlBusy = true
+    root.requestFailed("")
+    root.localPlayerState = ({ phase: verb === "stop" ? "stopped" : "starting", ready: false, playing: false, error: "" })
+    localControlProc.command = ["systemctl", "--user", verb, "omarchy-ma-player.service"]
+    localControlTimeout.restart()
+    localControlProc.running = true
+    return "ok"
+  }
+
+  function startLocalPlayer() { return root.runLocalControl("start") }
+  function stopLocalPlayer() {
+    root.playHerePending = false
+    return root.runLocalControl("stop")
+  }
+  function restartLocalPlayer() { return root.runLocalControl("restart") }
+  function enableLocalPlayer() { return root.runLocalControl("enable") }
+  function disableLocalPlayer() { return root.runLocalControl("disable") }
+
+  Process {
+    id: localControlProc
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(code) {
+      localControlTimeout.stop()
+      root.localControlBusy = false
+      if (code !== 0) {
+        root.playHerePending = false
+        root.localPlayerState = ({ phase: "error", ready: false, playing: false, error: "LOCAL_CONTROL_FAILED" })
+        root.requestFailed("LOCAL_CONTROL_FAILED")
+      } else Qt.callLater(root.refreshLocalPlayerStatus)
+    }
+  }
+  Timer {
+    id: localControlTimeout
+    interval: 15000
+    onTriggered: {
+      localControlProc.signal(9)
+      root.localControlBusy = false
+      root.playHerePending = false
+      root.localPlayerState = ({ phase: "error", ready: false, playing: false, error: "LOCAL_CONTROL_TIMEOUT" })
+      root.requestFailed("LOCAL_CONTROL_TIMEOUT")
+    }
+  }
+
+  function playHere() {
+    if (!root.localPlayerEnabled) return "LOCAL_PLAYER_DISABLED"
+    if (root.localControlBusy) return "LOCAL_PLAYER_BUSY"
+    root.playHerePending = true
+    if (root.localPlayerReady) root.selectLocalPlayer()
+    else return root.startLocalPlayer()
+    return "ok"
+  }
+
+  function selectLocalPlayer() {
+    if (!root.playHerePending || !root.localPlayerReady) return
+    var player = root.playerById(root.localPlayerId)
+    if (!player || !player.available) return
+    root.playHerePending = false
+    // Selection only: never transfers, replaces or starts another player's queue.
+    root.activatePlayer(root.localPlayerId)
+  }
+  Timer {
+    interval: 45000
+    running: root.playHerePending
+    onTriggered: { root.playHerePending = false; root.lastError = "LOCAL_PLAYER_NOT_READY" }
+  }
 
   // --------------------------------------------------------------- mpris
   readonly property var mprisPlayers: Mpris.players ? Mpris.players.values : []
@@ -60,7 +196,8 @@ Item {
   }
 
   function mprisRoutingEnabled() {
-    return root.config && root.config.mprisFallback !== false
+    if (root.localPlayerEnabled && (!root.localPlayerId || root.localPlayerSelected)) return false
+    return !root.localPlayerSelected && root.config && root.config.mprisFallback !== false
   }
   property string preferredPlayerId: ""
   property var favorites: ({ tracks: [], albums: [], artists: [], playlists: [], radio: [] })
@@ -99,8 +236,8 @@ Item {
   readonly property string activeArtist: MaApi.trackArtist(activeMedia)
   readonly property string activeAlbum: MaApi.trackAlbum(activeMedia)
   readonly property string activeImageUrl: MaApi.trackImageUrl(activeMedia)
-  readonly property int activeDuration: activeMedia && activeMedia.duration ? activeMedia.duration : 0
-  readonly property int activeElapsed: activeMedia && activeMedia.elapsed_time ? activeMedia.elapsed_time : 0
+  readonly property int activeDuration: activeMedia && activeMedia.duration ? Math.round(activeMedia.duration * 1000) : 0
+  readonly property int activeElapsed: activeMedia && activeMedia.elapsed_time ? Math.round(activeMedia.elapsed_time * 1000) : 0
 
   // ---------------------------------------------------------------- config loader
 
@@ -115,6 +252,8 @@ Item {
       root.configError = "config.json missing or unreadable"
       root.config = ({})
       root.ready = false
+      root.stopConnection()
+      root.requestFailed("CONFIG_UNREADABLE")
     }
   }
 
@@ -153,6 +292,8 @@ Item {
 
   function installMediaKeysBindings() {
     if (!root.ready) return
+    // Remote/local playback must not rewrite the desktop's existing key routing.
+    if (root.localPlayerEnabled) return
     if (root.config && root.config.installMediaKeys === false) return
 
     mediaKeysInstaller.running = true
@@ -195,63 +336,78 @@ Item {
 
   // --------------------------------------------------- config persistence
 
+  property string pendingConfigJson: ""
+
   Process {
     id: configSaver
     property string savePath: ""
     property string saveJson: ""
+    property bool savePending: false
+    stdinEnabled: true
+    onStarted: { write(saveJson + "\n"); saveJson = ""; stdinEnabled = false }
     onExited: function(exitCode) {
       if (exitCode === 0) {
         console.log("[music-assistant] Config persisted to " + savePath)
       } else {
         console.warn("[music-assistant] Failed to persist config (exit=" + exitCode + ")")
       }
+      if (savePending) Qt.callLater(root.flushConfigSave)
+      else configFile.reload()
     }
   }
 
-  function configSaveScript(path, json) {
+  function configSaveScript(path) {
     var safePath = path.replace(/'/g, "'\\''")
-    var safeJson = json.replace(/'/g, "'\\''")
-    // Defense against symlink pre-creation at a predictable path:
-    //   1. mktemp creates a uniquely-named file in the same directory as
-    //      the final config, with mode 0600 from the start (umask 077 +
-    //      mktemp's default permissions). Same directory = atomic rename.
-    //   2. Open the file with exec 3>"$T" *before* any other lookup of
-    //      $T happens. The fd stays bound to the original inode even if
-    //      a same-user attacker races to replace $T with a symlink.
-    //   3. Write through fd 3 (printf >&3), close fd (exec 3>&-).
-    //   4. mv -f: atomic rename(2) on Linux; replaces the destination
-    //      atomically regardless of what the destination was (regular
-    //      file, symlink, missing).
-    //   5. chmod 600 the final file in case the destination already
-    //      existed with broader perms.
     var lastSlash = path.lastIndexOf("/")
     var safeDir = (lastSlash >= 0 ? path.substring(0, lastSlash) : ".").replace(/'/g, "'\\''")
+    // Atomic private write. JSON/token travel only on stdin, never shell argv.
     return "set -e\n" +
       "umask 077\n" +
       "D='" + safeDir + "'\n" +
       "F='" + safePath + "'\n" +
+      "mkdir -p -- \"$D\"\n" +
       "T=$(mktemp -p \"$D\" ma-config.XXXXXXXXXX)\n" +
+      "trap 'rm -f -- \"$T\"' EXIT\n" +
       "exec 3> \"$T\"\n" +
-      "printf '%s\\n' '" + safeJson + "' >&3\n" +
+      "cat >&3\n" +
       "exec 3>&-\n" +
       "chmod 600 \"$T\"\n" +
-      "mv -f \"$T\" \"$F\"\n" +
-      "chmod 600 \"$F\"\n"
+      "mv -f \"$T\" \"$F\"\n"
   }
 
   function persistConfig() {
     if (!root.ready || !root.config) return
+    // Capture intent now, not after the previous write's watcher notification.
+    root.pendingConfigJson = JSON.stringify(root.config, null, 2)
+    configSaver.savePending = true
+    root.flushConfigSave()
+  }
+
+  function flushConfigSave() {
+    if (configSaver.running || !configSaver.savePending) return
     var path = root.configPath
-    var json = JSON.stringify(root.config, null, 2)
+    var json = root.pendingConfigJson
+    configSaver.savePending = false
     configSaver.savePath = path
     configSaver.saveJson = json
     configSaver.command = [Quickshell.env("SHELL") || "/bin/bash", "-c",
-      root.configSaveScript(path, json)]
+      root.configSaveScript(path)]
+    configSaver.stdinEnabled = true
     configSaver.running = true
   }
 
   function applyConfig(text) {
+    // Own atomic writes can notify before exit; reload the final file on exit.
+    if (configSaver.running || configSaver.savePending) return
     var result = ConfigSchema.parse(text)
+    var previous = JSON.stringify([root.config.url, root.config.token, root.config.localPlayer])
+    var next = JSON.stringify([result.config.url, result.config.token, result.config.localPlayer])
+    if (previous !== next || result.error) {
+      root.requestFailed("")
+      root.playHerePending = false
+      root.localPlayerId = ""
+      root.localPlayerState = ({ phase: "stopped", ready: false, playing: false, error: "" })
+    }
     root.config = result.config
     root.preferredPlayerId = result.config.preferredPlayerId || ""
     root.ready = result.error.length === 0
@@ -286,6 +442,7 @@ Item {
 
   function startConnection() {
     root.pollingActive = true
+    root.refreshLocalPlayerStatus()
     pollTimer.restart()
   }
 
@@ -295,8 +452,8 @@ Item {
   }
 
   function refreshState() {
-    if (!root.ready) return
-    if (root.pollInFlight) return
+    if (!root.ready || (root.localPlayerEnabled && (!root.localPlayerReady || root.localControlBusy))) return
+    if (root.pollInFlight || playersProc.busy || activeQueueProc.busy || queueProc.busy) return
     root.pollInFlight = true
     root.runFetchPlayers()
   }
@@ -308,93 +465,251 @@ Item {
     root.refreshState()
   }
 
+  // Every RPC, including library flows, must share the helper's authenticated
+  // browser session. Never fall back to HTTP when local playback is enabled.
+  function buildRequest(command, args, messageId) {
+    if (root.localPlayerEnabled) {
+      return { command: [root.localPlayerExecutable, "request"],
+        stdin: JSON.stringify({ command: command, args: args || {} }) + "\n",
+        local: true, epoch: root.requestEpoch }
+    }
+    var payload = MaApi.buildArgs(root.config.url, root.config.token, command, args, messageId)
+    return { command: [Quickshell.env("SHELL") || "/bin/bash", "-c", payload.script],
+      stdin: (payload.token || "") + "\n", local: false, epoch: root.requestEpoch }
+  }
+
   function runMaRequest(proc, payload) {
-    if (!payload) return
-    proc.authToken = payload.token || ""
-    proc.command = [Quickshell.env("SHELL") || "/bin/bash", "-c", payload.script]
-    proc.running = true
+    if (!root.ready || !payload) return false
+    if (root.localPlayerEnabled && (!root.localPlayerReady || root.localControlBusy)) {
+      root.pollInFlight = false
+      root.lastError = "LOCAL_PLAYER_NOT_READY"
+      return false
+    }
+    return proc.enqueue(payload)
+  }
+
+  function requestFailed(code) {
+    root.requestEpoch++
+    root.lastError = code
+    root.connected = false
+    root.players = []
+    root.queue = []
+    root.queuePosition = -1
+    root.activeQueueId = ""
+    root.activeQueuePlayerId = ""
+    root.queueEpoch++
+    root.shuffleEnabled = false
+    root.repeatMode = "off"
+    root.pollInFlight = false
+    root._lastSuccessAt = 0
+    root.searchResults = null
+    root.favorites = ({ tracks: [], albums: [], artists: [], playlists: [], radio: [] })
+    root.playlists = []
+    root.recentItems = []
+    root._favTypes = []
+    root.saveQueuePhase = ""
+  }
+
+  // A Process cannot be restarted from its stdout callback. Queue immutable
+  // jobs (including callbacks/context) and wait for both stream EOF and exit.
+  component MaRequest: Process {
+    id: request
+    property var jobs: []
+    property var job: null
+    property bool busy: false
+    property bool streamDone: false
+    property bool processExited: false
+    property bool timedOut: false
+    property int exitCode: -1
+    property int exitStatus: 0
+    property var handleReply: null
+    signal completed(int code, int status, var context)
+
+    function enqueue(payload) {
+      if (jobs.length >= 16) { root.lastError = "REQUEST_BUSY"; return false }
+      jobs = jobs.concat([payload])
+      drain()
+      return true
+    }
+    function drain() {
+      if (busy) return
+      while (jobs.length > 0) {
+        var next = jobs[0]
+        jobs = jobs.slice(1)
+        if (next.epoch !== root.requestEpoch) continue
+        job = next
+        busy = true
+        streamDone = false
+        processExited = false
+        timedOut = false
+        exitCode = -1
+        stdinEnabled = true
+        command = job.command
+        requestTimeout.restart()
+        running = true
+        return
+      }
+    }
+    function finish() {
+      if (!busy || !processExited || !streamDone) return
+      requestTimeout.stop()
+      var current = job
+      var code = timedOut ? -1 : exitCode
+      var obsolete = job.epoch !== root.requestEpoch
+      // Config changes and connection loss invalidate replies already in flight.
+      if (obsolete) code = -1
+      else {
+        try {
+          var value = current.statusOnly ? root.decodeLocalStatus(request.stdout.text, code)
+            : root.decodeReply(request.stdout.text, code, current.local)
+          if (typeof handleReply === "function") handleReply(value, current.context || {})
+        } catch (e) {
+          code = code || -1
+          root.requestFailed(current.local ? "HELPER_REQUEST_FAILED" : "MA_REQUEST_FAILED")
+        }
+      }
+      // Obsolete completion handlers must not overwrite a new session's state.
+      if (!obsolete) completed(code, exitStatus, current.context || {})
+      job = null
+      busy = false
+      Qt.callLater(drain)
+    }
+    onStarted: {
+      write(job.stdin)
+      job.stdin = ""
+      stdinEnabled = false
+    }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: { request.streamDone = true; request.finish() }
+    }
+    // Do not forward stderr (a server/transport may put credentials in errors).
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(code, status) {
+      exitCode = code
+      exitStatus = status
+      processExited = true
+      finish()
+    }
+    function expire() {
+      timedOut = true
+      if (running) {
+        signal(9)
+        // Retry cleanup if EOF or exited is absent after the kill.
+        requestTimeout.restart()
+      } else {
+        exitCode = -1
+        processExited = true
+        streamDone = true
+        finish()
+      }
+    }
+    property Timer watchdog: Timer {
+      id: requestTimeout
+      interval: request.timedOut ? 1000 : (request.job && !request.job.statusOnly ? 45000 : 15000)
+      onTriggered: request.expire()
+    }
+  }
+
+  function decodeReply(text, code, local) {
+    if (code !== 0 || !text || text.length > MaApi.MAX_RESPONSE_BYTES) throw new Error("REQUEST_FAILED")
+    var payload = JSON.parse(String(text))
+    if (payload === null || payload === undefined || payload.error || payload.error_code) throw new Error("REQUEST_FAILED")
+    var wrapped = Object.prototype.hasOwnProperty.call(payload, "result")
+    if (local && !wrapped) throw new Error("INVALID_HELPER_REPLY")
+    return wrapped ? payload.result : payload
   }
 
   function runFetchPlayers() {
     if (!root.ready) { root.pollInFlight = false; return }
-    var payload = MaApi.buildArgs(root.config.url, root.config.token, "players/all", {}, "poll-players")
+    var payload = root.buildRequest("players/all", {}, "poll-players")
     root.runMaRequest(playersProc, payload)
   }
 
   function runFetchQueue(playerId) {
     if (!root.ready || !playerId) { root.pollInFlight = false; return }
-    var payload = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = root.buildRequest("player_queues/get_active_queue", { player_id: playerId }, "poll-active-queue")
+    payload.context = { playerId: playerId, queueEpoch: root.queueEpoch }
+    if (!root.runMaRequest(activeQueueProc, payload)) root.pollInFlight = false
+  }
+
+  function runFetchQueueItems(playerId) {
+    if (!root.activeQueueId || root.activeQueuePlayerId !== playerId) { root.pollInFlight = false; return }
+    var payload = root.buildRequest(
       "player_queues/items",
-      { queue_id: playerId, limit: 200, offset: 0 },
+      { queue_id: root.activeQueueId, limit: 200, offset: 0 },
       "poll-queue")
-    root.runMaRequest(queueProc, payload)
+    payload.context = { playerId: playerId, queueId: root.activeQueueId, queueEpoch: root.queueEpoch }
+    if (!root.runMaRequest(queueProc, payload)) root.pollInFlight = false
   }
 
-  Process {
+  function resetQueueContext() {
+    root.queueEpoch++
+    root.activeQueueId = ""
+    root.activeQueuePlayerId = ""
+    root.queue = []
+    root.queuePosition = -1
+    root.shuffleEnabled = false
+    root.repeatMode = "off"
+  }
+
+  function setActivePlayer(playerId) {
+    if (playerId === root.activePlayerId) return
+    root.resetQueueContext()
+    root.activePlayerId = playerId
+  }
+
+  function applyActiveQueue(value, playerId) {
+    var queueId = value ? MaApi.boundedString(value.queue_id, 100) : ""
+    if (queueId !== root.activeQueueId) root.queue = []
+    root.activeQueueId = queueId
+    root.activeQueuePlayerId = root.activeQueueId ? playerId : ""
+    root.queuePosition = value && typeof value.current_index === "number" ? value.current_index : -1
+    root.shuffleEnabled = !!(value && value.shuffle_enabled)
+    root.repeatMode = value && ["off", "all", "one"].indexOf(value.repeat_mode) >= 0 ? value.repeat_mode : "off"
+    if (!root.activeQueueId) root.queue = []
+  }
+
+  MaRequest {
     id: playersProc
-    property string outputText: ""
-    property string authToken: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
+    handleReply: function(value, context) {
+      if (!root.applyPlayers(value)) return
+      root.selectLocalPlayer()
+      root.setActivePlayer(root.pickNextActivePlayer())
+      root.runFetchQueue(root.activePlayerId)
     }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var text = playersProc.stdout.text
-        try {
-          var payload = JSON.parse(String(text || "{}"))
-          root.applyPlayers(payload.result || payload)
-        } catch (e) {
-          root.lastError = "players parse: " + e.message
-        }
-        var chosen = root.pickNextActivePlayer()
-        if (chosen && chosen !== root.activePlayerId) {
-          root.activePlayerId = chosen
-        }
-        root.runFetchQueue(root.activePlayerId)
-      }
-    }
-    onExited: {
-      if (root.pollInFlight && root.lastError === "") {
-        // queue fetch will reset pollInFlight
-      } else if (root.pollInFlight) {
-        root.pollInFlight = false
-      }
+    onCompleted: function(code, status, context) {
+      if (code !== 0) root.pollInFlight = false
     }
   }
 
-  Process {
-    id: queueProc
-    property string authToken: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
-    }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          var payload = JSON.parse(String(queueProc.stdout.text || "{}"))
-          root.applyQueue(payload.result || payload)
-        } catch (e) {
-          root.lastError = "queue parse: " + e.message
-        }
+  MaRequest {
+    id: activeQueueProc
+    handleReply: function(value, context) {
+      if (context.playerId !== root.activePlayerId || context.queueEpoch !== root.queueEpoch) {
         root.pollInFlight = false
+        return
       }
+      root.applyActiveQueue(value, context.playerId)
+      root.runFetchQueueItems(context.playerId)
     }
+    onCompleted: function(code, status, context) {
+      if (code !== 0) root.pollInFlight = false
+    }
+  }
+
+  MaRequest {
+    id: queueProc
+    handleReply: function(value, context) {
+      if (context.playerId === root.activePlayerId && context.queueId === root.activeQueueId && context.queueEpoch === root.queueEpoch) root.applyQueue(value)
+    }
+    onCompleted: function(code, status, context) { root.pollInFlight = false }
   }
 
   function applyPlayers(list) {
     if (!Array.isArray(list)) {
-      root.lastError = "players/all returned non-list"
-      return
+      root.requestFailed("INVALID_PLAYERS")
+      return false
     }
     var bounded = MaApi.boundedArray(list, MaApi.MAX_PLAYERS).map(function(p) {
       return {
@@ -405,8 +720,7 @@ Item {
         playback_state: MaApi.boundedString(p.playback_state, 20),
         volume_muted: !!p.volume_muted,
         volume_level: typeof p.volume_level === "number" ? Math.max(0, Math.min(100, p.volume_level)) : null,
-        shuffle_enabled: !!p.shuffle_enabled,
-        repeat_mode: MaApi.boundedString(p.repeat_mode, 20),
+
         current_media: p.current_media || null,
         group_members: Array.isArray(p.group_members) ? MaApi.boundedArray(p.group_members, 16).map(function(g) { return MaApi.boundedString(g, 100) }) : [],
         hide_in_ui: !!p.hide_in_ui,
@@ -418,53 +732,32 @@ Item {
     root.connected = true
     root._lastSuccessAt = Date.now()
     root.lastError = ""
-    root.updatePlayModeFromPlayer()
+    return true
   }
 
   function applyQueue(payload) {
     if (!payload) {
       root.queue = []
-      root.queuePosition = 0
       return
     }
     var raw = Array.isArray(payload) ? payload : (payload.items || [])
     var items = MaApi.boundedArray(raw, MaApi.MAX_QUEUE_ITEMS).map(function(it) {
-      return {
-        queue_item_id: MaApi.boundedString(it.queue_item_id || it.item_id, 100),
-        uri: MaApi.boundedString(it.uri || it.media_item_uri, 2048),
-        name: MaApi.boundedString(it.name || it.title, 500),
-        artist: MaApi.boundedString(it.artist, 500),
-        album: MaApi.boundedString(it.album, 500),
-        image_url: MaApi.safeImageUrl(it.image_url || it.image, 2048),
-        duration: typeof it.duration === "number" && it.duration >= 0 ? it.duration : 0,
-        track_number: typeof it.track_number === "number" ? it.track_number : null,
-        media_type: MaApi.boundedString(it.media_type, 50)
-      }
+      return MaData.queueItem(it)
     })
-    var pos = (payload && payload.current_item_index !== undefined) ? payload.current_item_index
-      : (payload && payload.current_index !== undefined) ? payload.current_index
-      : 0
     root.queue = items
-    root.queuePosition = pos || 0
     root.queueRevision = root.queueRevision + 1
   }
 
   function pickNextActivePlayer() {
+    // An unavailable selected laptop must not silently select another queue.
+    if (root.localPlayerEnabled && root.localPlayerId && root.preferredPlayerId === root.localPlayerId) return root.localPlayerId
     return MaApi.pickActivePlayerId(root.players, root.preferredPlayerId)
   }
 
   function refreshPlayersOnly() {
-    if (!root.ready) return
-    var payload = MaApi.buildArgs(root.config.url, root.config.token, "players/all", {}, "ws-players")
-    root.runMaRequest(playersProc, payload)
+    root.refreshState()
   }
 
-  function updatePlayModeFromPlayer() {
-    var p = root.activePlayer
-    if (!p) return
-    if (p.shuffle_enabled !== undefined) root.shuffleEnabled = !!p.shuffle_enabled
-    if (p.repeat_mode !== undefined) root.repeatMode = String(p.repeat_mode)
-  }
 
   // ------------------------------------------------------------- helpers
 
@@ -487,32 +780,18 @@ Item {
   // ----------------------------------------------------------- action api
 
   function runAction(command, args, onDone) {
-    if (!root.ready) return
-    var payload = MaApi.buildPlayArgs(root.config.url, root.config.token, command, args)
-    actionProc.authToken = payload.token || ""
-    actionProc.command = [Quickshell.env("SHELL") || "/bin/bash", "-c", payload.script]
-    actionProc.onFinished = onDone || null
-    actionProc.actionCommand = command
-    actionProc.running = true
+    if (!root.ready || !root.connected) return false
+    var payload = root.buildRequest(command, args)
+    payload.context = { onDone: onDone || null }
+    return root.runMaRequest(actionProc, payload)
   }
 
-  Process {
+  MaRequest {
     id: actionProc
-    property string authToken: ""
-    property var onFinished: null
-    property string actionCommand: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
-    }
-    onExited: function(code, status) {
-      if (root.actionOnExited) root.actionOnExited(code, status)
-      if (typeof onFinished === "function") onFinished(code, status)
-      // schedule a quick refresh so UI picks up the new state
-      if (refreshTimer) refreshTimer.restart()
+    onCompleted: function(code, status, context) {
+      if (typeof root.actionOnExited === "function") root.actionOnExited(code, status)
+      if (typeof context.onDone === "function") context.onDone(code, status)
+      refreshTimer.restart()
     }
   }
 
@@ -527,9 +806,16 @@ Item {
 
   function actionForPlayer(playerId, command, args) {
     var pid = playerId || root.activePlayerId
+    if (!pid || !root.playerById(pid) || !root.playerById(pid).available) return
     var a = args ? Object.assign({}, args) : {}
-    a.queue_id = pid
-    root.runAction(command, a)
+    if (command.indexOf("players/cmd/") === 0) a.player_id = pid
+    else {
+      if (pid === root.activePlayerId) {
+        if (!root.activeQueueId || root.activeQueuePlayerId !== pid) return false
+        a.queue_id = root.activeQueueId
+      } else a.queue_id = pid
+    }
+    return root.runAction(command, a)
   }
 
   function actionForSourceTarget(command, args) {
@@ -553,7 +839,7 @@ Item {
       root.actionForPlayer(pid, "player_queues/play")
     }
     root.showOsd(isP ? "Pause" : "Play", isP ? "media-pause" : "media-play",
-      (MaApi.trackTitle(root.playerById(pid).current_media) || "Music Assistant"))
+      (MaApi.trackTitle((root.playerById(pid) || {}).current_media) || "Music Assistant"))
   }
 
   function next(playerId) {
@@ -562,7 +848,7 @@ Item {
       return
     }
     root.actionForPlayer(playerId, "player_queues/next")
-    root.showOsd("Next", "media-next", MaApi.trackTitle(root.playerById(playerId || root.activePlayerId).current_media))
+    root.showOsd("Next", "media-next", MaApi.trackTitle((root.playerById(playerId || root.activePlayerId) || {}).current_media))
   }
 
   function previous(playerId) {
@@ -571,7 +857,7 @@ Item {
       return
     }
     root.actionForPlayer(playerId, "player_queues/previous")
-    root.showOsd("Previous", "media-previous", MaApi.trackTitle(root.playerById(playerId || root.activePlayerId).current_media))
+    root.showOsd("Previous", "media-previous", MaApi.trackTitle((root.playerById(playerId || root.activePlayerId) || {}).current_media))
   }
 
   function play(playerId) {
@@ -600,13 +886,18 @@ Item {
   }
 
   function transferQueue(sourceId, targetId) {
+    var source = sourceId || root.activePlayerId
+    if (source === root.activePlayerId) {
+      if (!root.activeQueueId || root.activeQueuePlayerId !== source) return
+      source = root.activeQueueId
+    }
     root.runAction("player_queues/transfer", {
-      source_queue_id: sourceId || root.activePlayerId,
+      source_queue_id: source,
       target_queue_id: targetId,
       auto_play: true
     })
     root.preferredPlayerId = targetId
-    root.activePlayerId = targetId
+    root.setActivePlayer(targetId)
     if (root.config) {
       root.config.preferredPlayerId = targetId
       root.persistConfig()
@@ -615,9 +906,9 @@ Item {
   }
 
   function activatePlayer(playerId) {
-    if (!root.playerById(playerId)) return
+    if (!root.playerById(playerId) || !root.playerById(playerId).available) return
     root.preferredPlayerId = playerId
-    root.activePlayerId = playerId
+    root.setActivePlayer(playerId)
     if (root.config) {
       root.config.preferredPlayerId = playerId
       root.persistConfig()
@@ -653,10 +944,11 @@ Item {
     if (!query) return
     root.searchQuery = query
     var lim = limit || 20
-    var payload = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = root.buildRequest(
       "music/search",
       { search_query: query, limit: lim, media_types: ["track", "album", "artist", "playlist"] },
       "search-" + Date.now())
+    payload.context = { query: query }
     root.runMaRequest(searchProc, payload)
   }
 
@@ -667,17 +959,7 @@ Item {
 
   function _boundMediaItem(it) {
     if (!it) return null
-    return {
-      uri: MaApi.boundedString(it.uri || it.media_item_uri, 2048),
-      name: MaApi.boundedString(it.name || it.title, 500),
-      title: MaApi.boundedString(it.title || it.name, 500),
-      artist: MaApi.boundedString(it.artist, 500),
-      album: MaApi.boundedString(it.album, 500),
-      image_url: MaApi.safeImageUrl(it.image_url || it.image || it.imageUrl, 2048),
-      duration: typeof it.duration === "number" && it.duration >= 0 ? it.duration : 0,
-      track_number: typeof it.track_number === "number" ? it.track_number : null,
-      media_type: MaApi.boundedString(it.media_type, 50)
-    }
+    return MaData.mediaItem(it)
   }
 
   function _boundSearchResults(raw) {
@@ -685,181 +967,66 @@ Item {
     return {
       tracks: MaApi.boundedArray(raw.tracks || [], MaApi.MAX_SEARCH_TRACKS).map(_boundMediaItem),
       albums: MaApi.boundedArray(raw.albums || [], MaApi.MAX_SEARCH_ALBUMS).map(_boundMediaItem),
-      artists: MaApi.boundedArray(raw.artists || [], MaApi.MAX_SEARCH_ARTISTS).map(function(a) {
-        return {
-          uri: MaApi.boundedString(a.uri, 2048),
-          name: MaApi.boundedString(a.name, 500),
-          image_url: MaApi.safeImageUrl(a.image_url || a.image, 2048)
-        }
-      }),
+      artists: MaApi.boundedArray(raw.artists || [], MaApi.MAX_SEARCH_ARTISTS).map(_boundMediaItem),
       playlists: MaApi.boundedArray(raw.playlists || [], MaApi.MAX_SEARCH_PLAYLISTS).map(_boundMediaItem)
     }
   }
 
-  Process {
+  MaRequest {
     id: searchProc
-    property string authToken: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
-    }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          var payload = JSON.parse(String(searchProc.stdout.text || "{}"))
-          var bounded = _boundSearchResults(payload.result || payload)
-          root.searchResults = bounded || root.searchResults
-          root.searchRevision = root.searchRevision + 1
-        } catch (e) {
-          root.lastError = "search parse: " + e.message
-        }
-      }
+    handleReply: function(value, context) {
+      if (context.query !== root.searchQuery) return
+      root.searchResults = root._boundSearchResults(value)
+      root.searchRevision++
     }
   }
 
-  Process {
+  MaRequest {
     id: favProc
-    property string authToken: ""
-    property string typeKey: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
-    }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          var payload = JSON.parse(String(favProc.stdout.text || "{}"))
-          var list = payload.result || payload || []
-          var bounded = MaApi.boundedArray(list, MaApi.MAX_FAVORITES_PER_TYPE).map(_boundMediaItem).filter(function(x) { return x !== null })
-          var next = Object.assign({}, root.favorites)
-          next[favProc.typeKey] = bounded
-          root.favorites = next
-          root.favoritesRevision = root.favoritesRevision + 1
-        } catch (e) {
-          root.lastError = "favorites parse: " + e.message
-        }
-        root._favFetchNext()
-      }
+    handleReply: function(value, context) {
+      var bounded = MaApi.boundedArray(value, MaApi.MAX_FAVORITES_PER_TYPE).map(root._boundMediaItem).filter(function(x) { return x !== null })
+      var next = Object.assign({}, root.favorites)
+      next[context.typeKey] = bounded
+      root.favorites = next
+      root.favoritesRevision++
+      root._favFetchNext()
     }
   }
 
-  Process {
+  MaRequest {
     id: playlistsProc
-    property string authToken: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
-    }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          var payload = JSON.parse(String(playlistsProc.stdout.text || "{}"))
-          var list = Array.isArray(payload.result) ? payload.result : (Array.isArray(payload) ? payload : [])
-          root.playlists = MaApi.boundedArray(list, MaApi.MAX_PLAYLISTS).map(_boundMediaItem).filter(function(x) { return x !== null })
-          root.playlistsRevision = root.playlistsRevision + 1
-        } catch (e) {
-          root.lastError = "playlists parse: " + e.message
-        }
-      }
+    handleReply: function(value, context) {
+      root.playlists = MaApi.boundedArray(value, MaApi.MAX_PLAYLISTS).map(root._boundMediaItem).filter(function(x) { return x !== null })
+      root.playlistsRevision++
     }
   }
 
-  Process {
+  MaRequest {
     id: recentProc
-    property string authToken: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
-    }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        try {
-          var payload = JSON.parse(String(recentProc.stdout.text || "{}"))
-          var list = Array.isArray(payload.result) ? payload.result : []
-          root.recentItems = MaApi.boundedArray(list, MaApi.MAX_RECENT_ITEMS).map(function(it) {
-            return {
-              uri: MaApi.boundedString(it.uri, 2048),
-              name: MaApi.boundedString(it.name || it.title, 500),
-              artist: MaApi.boundedString(it.artist, 500),
-              album: MaApi.boundedString(it.album, 500),
-              image_url: MaApi.safeImageUrl(it.image_url, 2048),
-              last_played: MaApi.boundedString(it.last_played, 50),
-              timestamp: typeof it.timestamp === "number" ? it.timestamp : null
-            }
-          })
-          root.recentRevision = root.recentRevision + 1
-        } catch (e) {
-          root.lastError = "recent parse: " + e.message
-        }
-      }
+    handleReply: function(value, context) {
+      root.recentItems = MaApi.boundedArray(value, MaApi.MAX_RECENT_ITEMS).filter(function(it) { return !!it }).map(function(it) {
+        var bounded = root._boundMediaItem(it)
+        bounded.last_played = MaApi.boundedString(it.last_played, 50)
+        bounded.timestamp = typeof it.timestamp === "number" ? it.timestamp : null
+        return bounded
+      })
+      root.recentRevision++
     }
   }
 
-  Process {
+  MaRequest {
     id: saveQueueProc
-    property string authToken: ""
-    property string phase: ""
-    property string name: ""
-    property string newPlaylistId: ""
-    stdinEnabled: true
-    onStarted: {
-      if (authToken.length > 0) {
-        write(authToken + "\n")
-        authToken = ""
-      }
+    handleReply: function(value, context) {
+      // MA returns a BackgroundTask; scheduling is not completion.
+      root.saveQueuePhase = "scheduled"
     }
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        if (saveQueueProc.phase !== "create") {
-          root.saveQueuePhase = ""
-          root.saveQueueNewId = ""
-          root.refreshPlaylists()
-          return
-        }
-        try {
-          var payload = JSON.parse(String(saveQueueProc.stdout.text || "{}"))
-          var res = payload.result || payload
-          var pid = res && res.item_id ? res.item_id : (res && res.uri ? res.uri.split("/").pop() : "")
-          if (!pid) {
-            root.saveQueuePhase = ""
-            return
-          }
-          root.saveQueueNewId = pid
-          var items = root.queue.map(function(it) { return it.uri || it.media_item_uri || "" }).filter(function(u) { return u.length > 0 })
-          saveQueueProc.phase = "add"
-          var payload2 = MaApi.buildArgs(root.config.url, root.config.token,
-            "music/playlists/add_playlist_tracks", { playlist_id: pid, tracks: items },
-            "save-q-add")
-          saveQueueProc.authToken = payload2.token || ""
-          saveQueueProc.command = [Quickshell.env("SHELL") || "/bin/bash", "-c", payload2.script]
-          saveQueueProc.running = true
-        } catch (e) {
-          root.lastError = "save queue parse: " + e.message
-          root.saveQueuePhase = ""
-        }
-      }
+    onCompleted: function(code, status, context) {
+      if (code !== 0) root.saveQueuePhase = ""
     }
   }
 
   property string saveQueuePhase: ""
-  property string saveQueueNewId: ""
+
 
   property int searchRevision: 0
 
@@ -867,30 +1034,28 @@ Item {
     var pid = playerId || root.activePlayerId
     if (!pid) return
     var p = Math.max(0, Math.round(positionMs))
-    root.actionForPlayer(pid, "player_queues/seek", { position_ms: p })
+    if (!isFinite(p)) return
+    root.actionForPlayer(pid, "player_queues/seek", { position: p / 1000 })
   }
 
   function seekRelative(deltaMs) {
-    var cur = root.activeMedia ? (root.activeMedia.elapsed_time || 0) : 0
+    var cur = root.activeElapsed
     root.seek(root.activePlayerId, cur + deltaMs)
   }
 
   function toggleShuffle(playerId) {
     var pid = playerId || root.activePlayerId
-    var p = root.playerById(pid)
-    if (!p) return
-    var next = !(p.shuffle_enabled === true)
-    root.actionForPlayer(pid, "player_queues/shuffle", { shuffle_enabled: next })
-    root.shuffleEnabled = next
+    if (pid !== root.activePlayerId) return
+    var next = !root.shuffleEnabled
+    if (root.actionForPlayer(pid, "player_queues/shuffle", { shuffle_enabled: next })) root.shuffleEnabled = next
   }
 
   function cycleRepeat(playerId) {
     var pid = playerId || root.activePlayerId
-    var p = root.playerById(pid)
-    var cur = p && p.repeat_mode ? String(p.repeat_mode) : "off"
+    if (pid !== root.activePlayerId) return
+    var cur = root.repeatMode
     var next = cur === "off" ? "all" : (cur === "all" ? "one" : "off")
-    root.actionForPlayer(pid, "player_queues/repeat", { repeat_mode: next })
-    root.repeatMode = next
+    if (root.actionForPlayer(pid, "player_queues/repeat", { repeat_mode: next })) root.repeatMode = next
   }
 
   function power(playerId, on) {
@@ -906,7 +1071,9 @@ Item {
 
   function removeFavorite(uri) {
     if (!uri) return
-    root.actionForSourceTarget("music/favorites/remove_item", { item: uri })
+    var match = /^library:\/\/(track|album|artist|playlist|radio|audiobook|podcast)\/([0-9]+)$/.exec(String(uri))
+    if (!match) { root.lastError = "FAVORITE_REQUIRES_LIBRARY_ITEM"; return }
+    root.actionForSourceTarget("music/favorites/remove_item", { media_type: match[1], library_item_id: match[2] })
     root.refreshFavorites()
   }
 
@@ -925,7 +1092,7 @@ Item {
   }
 
   function refreshFavorites() {
-    if (!root.ready) return
+    if (!root.ready || favProc.busy) return
     root._favTypes = ["tracks", "albums", "artists", "playlists", "radio"]
     root._favIndex = 0
     root._favFetchNext()
@@ -934,40 +1101,46 @@ Item {
   function _favFetchNext() {
     if (root._favIndex >= root._favTypes.length) return
     var t = root._favTypes[root._favIndex++]
-    var payload = MaApi.buildArgs(root.config.url, root.config.token,
-      "music/favorites/" + t, { limit: 50 }, "fav-" + t)
-    favProc.typeKey = t
+    var payload = root.buildRequest(
+      "music/" + (t === "radio" ? "radios" : t) + "/library_items", { favorite: true, limit: 50, offset: 0 }, "fav-" + t)
+    payload.context = { typeKey: t }
     root.runMaRequest(favProc, payload)
   }
 
   function refreshPlaylists() {
     if (!root.ready) return
-    var payload = MaApi.buildArgs(root.config.url, root.config.token,
-      "music/playlists/all", { limit: 100 }, "playlists")
+    var payload = root.buildRequest(
+      "music/playlists/library_items", { limit: 100, offset: 0 }, "playlists")
     root.runMaRequest(playlistsProc, payload)
   }
 
   function refreshRecent() {
     if (!root.ready) return
-    var payload = MaApi.buildArgs(root.config.url, root.config.token,
+    var payload = root.buildRequest(
       "music/recently_played_items", { limit: root.config.recentLimit || 50 }, "recent")
     root.runMaRequest(recentProc, payload)
   }
 
   function saveQueueAsPlaylist(name) {
-    if (!name || !root.queue || root.queue.length === 0) return
-    var payload = MaApi.buildArgs(root.config.url, root.config.token,
-      "music/playlists/create_playlist", { name: name }, "save-q-create")
-    root.saveQueuePhase = "create"
-    saveQueueProc.phase = "create"
-    saveQueueProc.name = name
-    root.runMaRequest(saveQueueProc, payload)
+    if (!name || !root.activeQueueId || root.activeQueuePlayerId !== root.activePlayerId || !root.queue || root.queue.length === 0 || saveQueueProc.busy) return
+    var payload = root.buildRequest(
+      "player_queues/save_as_playlist", { queue_id: root.activeQueueId, name: name }, "save-q")
+    root.saveQueuePhase = "scheduling"
+    if (!root.runMaRequest(saveQueueProc, payload)) root.saveQueuePhase = ""
   }
 
   // ---------------------------------------------------------------- IPC
 
   IpcHandler {
     target: root.ipcTarget
+
+    function localPlayerStatus(): string { return root.localPlayerStatus() }
+    function startLocalPlayer(): string { return root.startLocalPlayer() }
+    function stopLocalPlayer(): string { return root.stopLocalPlayer() }
+    function restartLocalPlayer(): string { return root.restartLocalPlayer() }
+    function playHere(): string { return root.playHere() }
+    function enableLocalPlayer(): string { return root.enableLocalPlayer() }
+    function disableLocalPlayer(): string { return root.disableLocalPlayer() }
 
     function status(): string {
       return JSON.stringify({

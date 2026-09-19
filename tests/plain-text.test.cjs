@@ -1,0 +1,2 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
+for(const file of ['BarWidget.qml','PlayerControls.qml','LibraryList.qml','SearchResultRow.qml','TabIcon.qml'])test(file+' renders labels as plain text',()=>{const s=fs.readFileSync(path.join(__dirname,'..',file),'utf8');assert.equal((s.match(/\bText\s*\{/g)||[]).length,(s.match(/textFormat:\s*Text.PlainText/g)||[]).length);});

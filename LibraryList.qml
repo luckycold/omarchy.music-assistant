@@ -44,6 +44,7 @@ Item {
     ScrollBar.vertical: ScrollBar { }
 
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       visible: listView.count === 0
       text: root.emptyText

@@ -32,6 +32,82 @@ omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --en
    (`omarchy restart shell`) or save `~/.config/omarchy/shell.json` after
    adding the widget.
 
+## Optional local laptop playback
+
+**Development/testing:** this feature is on `feature/remote-local-playback`.
+The implementation is installed on the test laptop, but an intermittent health
+reconnect is still being investigated. See [verification status](docs/verification.md).
+
+Install the separate helper using [local-player/README.md](local-player/README.md)
+on the desktop user account. The plugin expects
+`~/.local/bin/omarchy-ma-player` and the user unit `omarchy-ma-player.service`;
+it does not install them itself. Keep `localPlayer.enabled: false` for the
+existing controller-only mode.
+
+Merge these settings into your existing runtime config, retaining `token`:
+
+```json
+{
+  "localPlayer": {
+    "enabled": true,
+    "remoteId": "<exact-26-character-remote-ID>",
+    "signalingUrl": "wss://signaling.music-assistant.io/ws",
+    "name": "Laptop",
+    "forceRelay": false
+  }
+}
+```
+
+Replace the Remote ID placeholder with the exact canonical ID; whitespace and
+case are not normalized. `name` must be nonempty and at most 80 characters.
+`forceRelay` requests relay-only connectivity. `url` is not required for RPCs in
+this mode; configure `openWebUiPath` separately if you want the web UI shortcut.
+The config stays at `$XDG_CONFIG_HOME/music-assistant/config.json` (default
+`~/.config/music-assistant/config.json`), outside Omarchy's watched plugin tree.
+File changes reload the plugin config; **restart the helper after changing its
+connection settings**. Protect the config with mode 0600.
+
+In **Players**, Start/Stop/Restart invoke `systemctl --user` for the helper unit.
+**Play here** starts it if needed, waits for readiness and selects the laptop's
+own queue. It does not transfer, replace or start another player's playback.
+The ordinary player-row transfer action remains separate. The panel shows the
+helper phase and safe errors, and disables playback actions while disconnected.
+
+When enabled, **every MA RPC**, including library/search/save-queue calls, uses
+the helper's authenticated remote session; helper failures never fall back to
+the configured LAN URL. The CLI contract is:
+
+- `omarchy-ma-player status`: JSON `{phase, ready, playerId, playing, error}`.
+- `omarchy-ma-player request`: one stdin JSON line `{command, args}`; stdout
+  `{result: ...}`, or a nonzero exit and `{error: "SAFE_CODE"}`.
+
+Requests are serialized per process with bounded queues, timeouts and session
+epoch invalidation. Controller-only mode retains token-over-stdin HTTP requests.
+Local-player mode never installs or rewrites media-key bindings. When this
+laptop is selected, plugin transport actions do not fall back to another MPRIS
+application, including while the helper is disconnected.
+
+### Local-player IPC
+
+Use the same `io.github.manologarciadev.music-assistant` IPC target:
+
+| Method | Description |
+|--------|-------------|
+| `localPlayerStatus()` | JSON phase/readiness/identity/playback/error plus enabled/busy/pending flags |
+| `startLocalPlayer()` / `stopLocalPlayer()` / `restartLocalPlayer()` | Helper user-service lifecycle |
+| `playHere()` | Start if needed and select local queue only |
+| `enableLocalPlayer()` / `disableLocalPlayer()` | Enable/disable service autostart, not current playback |
+
+`ok` acknowledges an accepted asynchronous action, not successful startup;
+inspect `localPlayerStatus()` for readiness or failure.
+
+### Verification boundary
+
+Run `node --test tests/*.test.cjs` for config and extracted QML JavaScript tests.
+These tests do not instantiate Quickshell or demonstrate live audio. Validate
+QML loading, helper readiness, actual PipeWire playback, relay-only operation,
+and reconnect/suspend behavior on the intended desktop before claiming those work.
+
 ## Features
 
 - Live now-playing in the bar with auto-scrolling label
@@ -43,9 +119,9 @@ omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --en
 - Search across tracks, albums, artists, playlists, and radio
 - Favorites: browse and play liked items, right-click to remove
 - Playlists: list user playlists, click to play
-- Recent: browse recently played items with relative timestamps
+- Recent: browse recently played items
 - "Save queue as playlist" from the Queue tab
-- HTTP polling for live state (2s default interval)
+- Polling for live state (2s default interval; HTTP or local helper transport)
 - IPC handlers for all actions (see table below)
 
 ## Bar widget
@@ -72,7 +148,7 @@ Add to the bar layout in `~/.config/omarchy/shell.json`:
     a result to play it on the active player
   - **Favorites** — browse and play liked items; right-click to remove
   - **Playlists** — list user playlists; click to play
-  - **Recent** — recently played items with relative timestamps
+  - **Recent** — recently played items
 
 ## IPC
 
@@ -170,7 +246,7 @@ When the popup is open:
 
 ## Media keys
 
-On first successful config load, the plugin auto-installs Hyprland bindings for `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, and `XF86AudioPrev` so your keyboard media keys control Music Assistant instead of Omarchy's default MPRIS routing.
+In controller-only mode, on first successful config load, the plugin auto-installs Hyprland bindings for `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, and `XF86AudioPrev` so your keyboard media keys control Music Assistant instead of Omarchy's default MPRIS routing. Local-player mode skips this installer and leaves existing bindings untouched.
 
 The block is appended to `~/.config/hypr/bindings.lua` between unique markers (`-- BEGIN music-assistant media-keys` / `-- END music-assistant media-keys`), is fully idempotent (won't duplicate), and runs `hyprctl reload` to activate. Look for `[music-assistant] Media key bindings installed (idempotent)` in the shell log.
 
@@ -224,5 +300,5 @@ bearer token is owner-readable only. If you have an existing install
 from before this fix, run once:
 
 ```sh
-chmod 600 ~/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/config.json
+chmod 600 "${XDG_CONFIG_HOME:-$HOME/.config}/music-assistant/config.json"
 ```

@@ -29,6 +29,7 @@ BorderSurface {
     anchors.centerIn: parent
     spacing: 1
     Text {
+      textFormat: Text.PlainText
       text: root.icon
       color: root.bar.foreground
       font.family: root.bar.fontFamily
@@ -37,6 +38,7 @@ BorderSurface {
       opacity: root.active ? 1.0 : 0.8
     }
     Text {
+      textFormat: Text.PlainText
       text: root.count > 0 ? root.label + " " + root.count : root.label
       color: root.bar.foreground
       font.family: root.bar.fontFamily

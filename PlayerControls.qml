@@ -67,6 +67,7 @@ Item {
         }
 
         Text {
+          textFormat: Text.PlainText
           anchors.centerIn: parent
           visible: !root.imageUrl
           text: "󰝚"
@@ -81,6 +82,7 @@ Item {
         width: parent.width - Style.space(74)
 
         Text {
+          textFormat: Text.PlainText
           text: root.title || "Nothing playing"
           color: root.bar.foreground
           font.family: root.bar.fontFamily
@@ -90,6 +92,7 @@ Item {
           width: parent.width
         }
         Text {
+          textFormat: Text.PlainText
           text: root.artist
           color: Qt.darker(root.bar.foreground, 1.3)
           font.family: root.bar.fontFamily
@@ -99,6 +102,7 @@ Item {
           visible: text !== ""
         }
         Text {
+          textFormat: Text.PlainText
           text: root.album
           color: Qt.darker(root.bar.foreground, 1.6)
           font.family: root.bar.fontFamily
@@ -194,6 +198,7 @@ Item {
       Row {
         width: parent.width
         Text {
+          textFormat: Text.PlainText
           text: formatTime(root.elapsed)
           color: Qt.darker(root.bar.foreground, 1.3)
           font.family: root.bar.fontFamily
@@ -201,6 +206,7 @@ Item {
         }
         Item { width: 1; height: 1 }
         Text {
+          textFormat: Text.PlainText
           text: formatTime(root.duration)
           color: Qt.darker(root.bar.foreground, 1.3)
           font.family: root.bar.fontFamily

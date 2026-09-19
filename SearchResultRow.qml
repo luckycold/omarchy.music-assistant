@@ -54,6 +54,7 @@ BorderSurface {
       anchors.verticalCenter: parent.verticalCenter
 
       Text {
+        textFormat: Text.PlainText
         id: titleText
         anchors.left: parent.left
         anchors.right: badges.left
@@ -82,6 +83,7 @@ BorderSurface {
           implicitWidth: typeLbl.implicitWidth + Style.space(8)
           implicitHeight: typeLbl.implicitHeight + Style.space(4)
           Text {
+            textFormat: Text.PlainText
             id: typeLbl
             anchors.centerIn: parent
             text: root.type
@@ -100,6 +102,7 @@ BorderSurface {
           implicitWidth: srcLbl.implicitWidth + Style.space(8)
           implicitHeight: srcLbl.implicitHeight + Style.space(4)
           Text {
+            textFormat: Text.PlainText
             id: srcLbl
             anchors.centerIn: parent
             text: root.source
@@ -113,6 +116,7 @@ BorderSurface {
   }
 
   Text {
+    textFormat: Text.PlainText
     visible: root.subtitle !== ""
     anchors.left: parent.left
     anchors.right: parent.right

@@ -8,5 +8,12 @@
   "showSourceBadge": true,
   "openWebUiPath": "",
   "installMediaKeys": true,
-  "mprisFallback": true
+  "mprisFallback": true,
+  "localPlayer": {
+    "enabled": false,
+    "remoteId": "",
+    "signalingUrl": "wss://signaling.music-assistant.io/ws",
+    "name": "Laptop",
+    "forceRelay": false
+  }
 }
