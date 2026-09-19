@@ -13,11 +13,18 @@ test('stopping the title marquee resets its offset', () => {
 
 test('elapsed and duration sit on opposite ends of the progress row', () => {
   const controls = fs.readFileSync(require('node:path').join(__dirname, '../PlayerControls.qml'), 'utf8');
-  assert.match(controls, /text: formatTime\(root\.elapsed\)/);
+  assert.match(controls, /formatTime\(progressSlider\.dragging \? progressSlider\.liveValue : localElapsed\)/);
   assert.match(controls, /text: formatTime\(root\.duration\)/);
   assert.match(controls, /anchors\.left: parent\.left/);
   assert.match(controls, /anchors\.right: parent\.right/);
   assert.doesNotMatch(controls, /Item \{ width: 1; height: 1 \}/);
+});
+
+test('progress slider seeks on release with 5s wheel steps, not on every drag tick', () => {
+  const controls = fs.readFileSync(require('node:path').join(__dirname, '../PlayerControls.qml'), 'utf8');
+  assert.match(controls, /step: 5000/);
+  assert.match(controls, /onReleased: /);
+  assert.doesNotMatch(controls, /onMoved: root\.seek/);
 });
 
 test('favorite icon is an outline heart until the current track is favorited', () => {

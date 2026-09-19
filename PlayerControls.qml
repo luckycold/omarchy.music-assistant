@@ -16,6 +16,7 @@ Item {
   property int volume: 100
   property int elapsed: 0
   property int duration: 0
+  property int localElapsed: 0
   property bool isPlaying: false
   property bool shuffleEnabled: false
   property string repeatMode: "off"
@@ -29,6 +30,9 @@ Item {
   signal cycleRepeat()
   signal favoriteCurrent()
   signal openWebUI()
+
+  onElapsedChanged: if (!progressSlider.dragging) localElapsed = elapsed
+  Component.onCompleted: localElapsed = elapsed
 
   implicitWidth: Style.space(360)
   implicitHeight: column.implicitHeight
@@ -189,10 +193,14 @@ Item {
         width: parent.width
         minimum: 0
         maximum: root.duration > 0 ? root.duration : 1
-        value: root.elapsed
+        value: root.localElapsed
+        step: 5000
         bar: root.bar
         enabled: root.duration > 0
-        onMoved: root.seek(value)
+        onReleased: {
+          root.localElapsed = value
+          root.seek(value)
+        }
       }
 
       Item {
@@ -202,7 +210,7 @@ Item {
           id: elapsedLabel
           textFormat: Text.PlainText
           anchors.left: parent.left
-          text: formatTime(root.elapsed)
+          text: formatTime(progressSlider.dragging ? progressSlider.liveValue : localElapsed)
           color: Qt.darker(root.bar.foreground, 1.3)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
