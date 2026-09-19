@@ -1,7 +1,7 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,rm,stat} from 'node:fs/promises';import {join} from 'node:path';import {connect} from 'node:net';import {once} from 'node:events';import WebSocket from 'ws';
-import {createBridge} from '../src/bridge.ts';
-async function setup(){const dir=await mkdtemp(join(process.cwd(),'test/tmp-'));const b=await createBridge({state:dir,config:{token:'private'},deadlineMs:60,authMs:30,healthMs:1000});return{b,dir,close:async()=>{await b.close();await rm(dir,{recursive:true,force:true});}};}
+import {createBridge} from '../src/bridge.ts';import {tmpdir} from 'node:os';
+async function setup(){const dir=await mkdtemp(join(tmpdir(),'ma-bridge-'));const b=await createBridge({state:dir,config:{token:'private'},deadlineMs:60,authMs:30,healthMs:1000});return{b,dir,close:async()=>{await b.close();await rm(dir,{recursive:true,force:true});}};}
 async function req(path:string,obj:any){const s=connect(path);await once(s,'connect');s.end(JSON.stringify(obj)+'\n');let out='';for await(const b of s)out+=b;return JSON.parse(out);}
 async function browser(b:any){const w=new WebSocket(b.url,{origin:'null'});await once(w,'open');w.send(JSON.stringify({type:'hello',secret:b.secret}));const [data]=await once(w,'message');assert.equal(JSON.parse(String(data)).type,'config');return w;}
 test('owner-only socket and local status; rejects forbidden commands',async()=>{const x=await setup();try{assert.equal((await stat(x.b.socketPath)).mode&0o777,0o600);assert.equal((await req(x.b.socketPath,{command:'local/status',args:{}})).result.ready,false);assert.equal((await req(x.b.socketPath,{command:'auth',args:{}})).error,'RPC_RESERVED');}finally{await x.close();}});
