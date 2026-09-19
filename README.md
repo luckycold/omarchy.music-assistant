@@ -32,25 +32,6 @@ omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --en
    (`omarchy restart shell`) or save `~/.config/omarchy/shell.json` after
    adding the widget.
 
-## Adaptive bar width
-
-On the stock horizontal Omarchy bar, the title fills the free space on its side
-of the centered clock instead of stopping at 180px. The allocation is local to
-each monitor and reserves space for fixed widgets. Titles scroll only when they
-still do not fit. No media routing or keyboard bindings are changed.
-
-Set `fillAvailable: false` in this widget's `shell.json` layout entry to use the
-old bounded width. `fillAnchor` defaults to `omarchy.clock`; if changed it must
-match the bar's actual center anchor. Vertical bars or missing anchors fall back
-to the original width. Very narrow bars can still overflow if fixed controls
-alone consume the available space.
-
-`FlexibleMediaWidth.qml` and `MediaWidthAllocator.js` must accompany the widget.
-The allocator traverses only the current bar window's visual slots, never the
-service tree, and does not poll. A native-media clone can use the same allocator;
-the reproducible two-widget bootstrap is maintained in
-[`luckycold/dotfiles`](https://github.com/luckycold/dotfiles/tree/main/bootstrap/omarchy-media-layout).
-
 ## Optional local laptop playback
 
 **Development/testing:** this feature is on `feature/remote-local-playback`.

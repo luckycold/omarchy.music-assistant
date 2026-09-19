@@ -127,28 +127,3 @@ npm run check
 ```
 
 Do not infer live reliability from the unit-test count or a successful build.
-
-## Adaptive media layout — 2026-09-19
-
-The native MPRIS widget was cloned through Omarchy's supported user-local clone
-command; no system Bar.qml or global media bindings were edited. Its service
-lookup uses its injected clone id. Both widgets share the same visual-slot
-allocator. The plugin now passes 76 root tests; the unchanged runtime passes
-51 TypeScript and 29 Python tests plus typecheck/build.
-
-Parent native checks on three active screens verified the laptop's two widget
-widths at 475/320 logical pixels and external widths at 1090/880. Fixed clock and
-controls did not overlap; inter-group gaps measured 7–8px after integer geometry
-rounding. An isolated native QML fixture with synthetic metadata also passed
-long-to-short marquee reset, live resize, artist-only media, filling toggles,
-and hide/reappear checks with clean logs. Its initial artist-only failure drove
-a visibility correction in the native-widget bootstrap. Disabling filling returned both widgets to their old bounded widths;
-reenabling restored the allocations. Temporary settings were removed afterward.
-Full-width laptop/external bar captures were inspected. The current shell log
-contained no layout/plugin binding errors (unrelated existing omaconnect warnings
-remain). JavaScript adapter tests separately exercise empty/hidden slots, lane
-allocation, missing anchors, and poisoned flexible-geometry getters.
-
-Layout changes do not start, stop, or redirect playback. Exact widths depend on
-visible workspaces/indicators. The installer and safe upstream-drift/idempotence
-checks are versioned in the dotfiles bootstrap rather than private runtime config.

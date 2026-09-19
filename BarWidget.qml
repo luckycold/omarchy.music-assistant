@@ -58,14 +58,6 @@ BarWidget {
   function openSection(s) { popupSection = s; popupOpen = true }
 
   property real maxLabelWidth: 180
-  // Only the title viewport grows; playback and media-source routing are unchanged.
-  readonly property bool fillMediaWidth: setting("fillAvailable", true) === true
-  readonly property real minimumMediaWidth: glyph.implicitWidth + row.spacing + Style.space(14)
-  FlexibleMediaWidth {
-    id: flexWidth
-    widget: root
-    anchorId: String(root.setting("fillAnchor", "omarchy.clock"))
-  }
   property real popupWidth: 380
   property string searchFilter: "all"
   property string favFilter: "tracks"
@@ -96,9 +88,7 @@ BarWidget {
 
     Item {
       id: scrollClip
-      width: flexWidth.allocatedWidth >= 0
-        ? Math.max(0, flexWidth.allocatedWidth - root.minimumMediaWidth)
-        : Math.min(root.maxLabelWidth, labelText.implicitWidth)
+      width: Math.min(root.maxLabelWidth, labelText.implicitWidth)
       height: glyph.height
       clip: true
       anchors.verticalCenter: parent.verticalCenter
@@ -122,7 +112,6 @@ BarWidget {
 
         NumberAnimation on x {
           id: scrollAnim
-          onRunningChanged: if (!running) labelText.x = 0
           running: labelText.needsScroll && !root.popupOpen && !root.bar.vertical
           loops: Animation.Infinite
           duration: Math.max(6000, labelText.implicitWidth * 25)
