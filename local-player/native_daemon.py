@@ -59,7 +59,7 @@ def load_config(path: Path) -> dict:
         _validate_url(signaling)
     except TransportError:
         raise RuntimeError("CONFIG_INVALID") from None
-    name = player.get("name", "Laptop")
+    name = player.get("name", "This device")
     if not isinstance(name, str) or not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
         raise RuntimeError("CONFIG_INVALID")
     force = player.get("forceRelay", False)

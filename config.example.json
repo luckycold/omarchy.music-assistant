@@ -13,7 +13,7 @@
     "enabled": false,
     "remoteId": "",
     "signalingUrl": "wss://signaling.music-assistant.io/ws",
-    "name": "Laptop",
+    "name": "This device",
     "forceRelay": false
   }
 }

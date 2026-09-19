@@ -61,7 +61,7 @@ function parse(text) {
   // Nested defaults are new objects for every parse, never coerced to strings.
   var local = parsed.localPlayer
   var localError = ""
-  merged.localPlayer = { enabled: false, remoteId: "", signalingUrl: "wss://signaling.music-assistant.io/ws", name: "Laptop", forceRelay: false }
+  merged.localPlayer = { enabled: false, remoteId: "", signalingUrl: "wss://signaling.music-assistant.io/ws", name: "This device", forceRelay: false }
   if (local !== undefined) {
     if (!isPlainObject(local)) localError = "localPlayer must be object"
     else {

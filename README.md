@@ -37,7 +37,7 @@ omarchy plugin add https://github.com/manologarciadev/omarchy.music-assistant.gi
    (`omarchy restart shell`) or save `~/.config/omarchy/shell.json` after
    adding the widget.
 
-## Optional local laptop playback
+## Optional playback on this device
 
 Requires Python 3.12+, `uv` or `pip`, PortAudio, Python D-Bus/PyGObject
 (`python-dbus` / `python-gobject` on Arch), a systemd user session, and working
@@ -50,7 +50,7 @@ cd "$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/loca
 
 The installer creates a private venv, installs the native Sendspin helper
 outside the plugin directory, and registers its user services. From the plugin,
-**Players → Play on this laptop** runs this installer if needed, enables the
+**Players → Play on this device** runs this installer if needed, enables the
 helper, and selects this machine. `./install.sh` still does not start playback
 by itself. Add these settings to your private config, retaining `token`:
 
@@ -61,7 +61,7 @@ by itself. Add these settings to your private config, retaining `token`:
     "enabled": true,
     "remoteId": "<exact-26-character-remote-ID>",
     "signalingUrl": "wss://signaling.music-assistant.io/ws",
-    "name": "Laptop",
+    "name": "This device",
     "forceRelay": false
   }
 }
@@ -80,8 +80,8 @@ omarchy-ma-player status   # wait for ready: true
 omarchy-ma-player enable
 ```
 
-**Players → Play on this laptop** installs the helper if needed, then
-starts/selects the laptop without transferring or starting another player's
+**Players → Play on this device** installs the helper if needed, then
+starts/selects this machine without transferring or starting another player's
 queue. Start/Stop/Restart manage an already-installed helper.
 All MA requests use its authenticated remote session, without LAN fallback.
 Audio uses native Sendspin over a Music Assistant Remote ID; it does not run
@@ -162,7 +162,7 @@ other shell components (or external scripts) can call it:
 |--------|-------------|
 | `localPlayerStatus()` | Helper phase, readiness and safe error status |
 | `startLocalPlayer()` / `stopLocalPlayer()` / `restartLocalPlayer()` | Helper lifecycle |
-| `playHere()` | Start if needed and select the laptop |
+| `playHere()` | Start if needed and select this device |
 | `playOnThisDevice()` | Install helper if needed, enable it, then play here |
 | `enableLocalPlayer()` / `disableLocalPlayer()` | Enable/disable autostart, not current playback |
 
@@ -237,14 +237,14 @@ The block is appended to `~/.config/hypr/bindings.lua` between unique markers (`
 ### Local-device media source
 
 The managed local player includes an MPRIS companion. It registers **Music
-Assistant (Laptop)** as a normal desktop media source with track metadata and
+Assistant** as a normal desktop media source with track metadata and
 playback controls, alongside browser video and other media applications.
 Omarchy's existing source selection and media shortcuts remain in charge—no
 exclusive play/pause binding is installed.
 
 The companion resolves the local helper's persistent player identity. It never
 uses the speaker selected in the plugin. Selecting a remote speaker therefore
-does not expose that speaker through the laptop's media keys. Stop the local
+does not expose that speaker through this device's media keys. Stop the local
 helper and its MPRIS companion stops with it.
 
 On default Omarchy bindings, Shift+Play/Pause switches media sources. Normal

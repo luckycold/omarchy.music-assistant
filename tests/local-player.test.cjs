@@ -43,7 +43,7 @@ test('helper failure clears in-flight state', () => {
   assert.equal(root.requestEpoch, 3);
 });
 
-test('play here selects the laptop without transferring a queue', () => {
+test('play here selects this device without transferring a queue', () => {
   let starts = 0;
   const root = {localPlayerEnabled: true, localPlayerReady: false, localControlBusy: false,
     startLocalPlayer: () => { starts++; return 'ok'; }, selectLocalPlayer() {}};

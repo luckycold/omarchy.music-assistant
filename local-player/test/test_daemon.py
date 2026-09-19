@@ -27,13 +27,13 @@ class ConfigTest(unittest.TestCase):
                     "enabled": True,
                     "remoteId": "AAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "signalingUrl": "wss://signaling.example.test/ws",
-                    "name": "Laptop",
+                    "name": "This device",
                     "forceRelay": False,
                 },
             }))
             os.chmod(path, 0o600)
             cfg = load_config(path)
-            self.assertEqual(cfg["name"], "Laptop")
+            self.assertEqual(cfg["name"], "This device")
             self.assertFalse(cfg["forceRelay"])
             os.chmod(path, 0o644)
             with self.assertRaises(RuntimeError):
@@ -48,7 +48,7 @@ class ConfigTest(unittest.TestCase):
                     "enabled": True,
                     "remoteId": "AAAAAAAAAAAAAAAAAAAAAAAAAA",
                     "signalingUrl": "http://signaling.example.test/ws",
-                    "name": "Laptop",
+                    "name": "This device",
                     "forceRelay": False,
                 },
             }

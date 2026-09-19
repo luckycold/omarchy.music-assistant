@@ -817,7 +817,7 @@ Item {
   }
 
   function pickNextActivePlayer() {
-    // An unavailable selected laptop must not silently select another queue.
+    // An unavailable selected local player must not silently select another queue.
     if (root.localPlayerEnabled && root.localPlayerId && root.preferredPlayerId === root.localPlayerId) return root.localPlayerId
     return MaApi.pickActivePlayerId(root.players, root.preferredPlayerId)
   }

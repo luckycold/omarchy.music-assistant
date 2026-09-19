@@ -329,7 +329,7 @@ BarWidget {
                     color: root.bar.foreground
                     font.family: root.bar.fontFamily
                     font.pixelSize: Style.font.bodySmall
-                    text: "Laptop player: " + (root.service ? root.service.localPlayerState.phase : "stopped")
+                    text: "This device: " + (root.service ? root.service.localPlayerState.phase : "stopped")
                       + (root.service && root.service.localPlayerState.error ? " · " + root.service.localPlayerState.error : "")
                       + (root.service && root.service.playHerePending ? " · waiting to select…" : "")
                     Accessible.name: text
@@ -338,7 +338,7 @@ BarWidget {
                     width: parent.width
                     spacing: Style.space(4)
                     Button {
-                      text: "Play on this laptop"
+                      text: "Play on this device"
                       foreground: root.bar.foreground
                       enabled: root.serviceReady && !root.service.localControlBusy && !root.service.playHerePending
                       opacity: enabled ? 1 : 0.4
@@ -373,8 +373,8 @@ BarWidget {
                     textFormat: Text.PlainText
                     width: parent.width
                     text: root.service && root.service.localPlayerEnabled
-                      ? "Play on this laptop selects this machine without moving another queue."
-                      : "Installs the helper if needed, then plays on this laptop."
+                      ? "Play on this device selects this machine without moving another queue."
+                      : "Installs the helper if needed, then plays on this device."
                     wrapMode: Text.WordWrap
                     color: Qt.darker(root.bar.foreground, 1.4)
                     font.family: root.bar.fontFamily
