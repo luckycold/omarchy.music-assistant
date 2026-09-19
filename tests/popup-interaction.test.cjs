@@ -22,9 +22,13 @@ test('elapsed and duration sit on opposite ends of the progress row', () => {
 
 test('progress slider seeks on release with 5s wheel steps, not on every drag tick', () => {
   const controls = fs.readFileSync(require('node:path').join(__dirname, '../PlayerControls.qml'), 'utf8');
+  const slider = fs.readFileSync(require('node:path').join(__dirname, '../ProgressSlider.qml'), 'utf8');
   assert.match(controls, /step: 5000/);
   assert.match(controls, /onReleased: /);
   assert.doesNotMatch(controls, /onMoved: root\.seek/);
+  assert.match(controls, /ProgressSlider/);
+  assert.match(slider, /DragHandler/);
+  assert.match(slider, /WheelHandler/);
 });
 
 test('favorite icon is an outline heart until the current track is favorited', () => {
@@ -33,10 +37,11 @@ test('favorite icon is an outline heart until the current track is favorited', (
   assert.doesNotMatch(controls, /󰥂/);
 });
 
-test('Now keeps the queue in the same scroll view and drops the Queue tab', () => {
-  assert.equal((source.match(/ScrollView\s*\{/g) || []).length, 1);
+test('Now pins the player and gives the queue its own scroll view', () => {
+  assert.match(source, /id: queueFlick/);
   const queue = source.slice(source.indexOf('// ------------------ Queue section'), source.indexOf('// ------------------ Search section'));
   assert.match(queue, /visible: root\.popupSection === "now"/);
+  assert.match(queue, /ScrollView/);
   assert.doesNotMatch(source, /\{ id: "queue",/);
   assert.match(source, /KeyboardPanel\s*\{/);
   assert.match(source, /text: "Play on this device"/);

@@ -284,6 +284,7 @@ BarWidget {
                 visible: root.popupSection === "now"
   
                 PlayerControls {
+                  id: nowPlayer
                   enabled: root.serviceConnected && root.activePlayer && root.activePlayer.available
                     && (!root.service.localPlayerSelected || root.service.localPlayerReady)
                   opacity: enabled ? 1 : 0.4
@@ -518,7 +519,19 @@ BarWidget {
                     onClicked: if (root.service) root.service.clearQueue(root.service.activePlayerId)
                   }
                 }
-  
+
+                ScrollView {
+                  id: queueFlick
+                  width: parent.width
+                  height: Math.max(Style.space(72), popupRow.height - nowPlayer.implicitHeight - Style.space(64))
+                  clip: true
+                  ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                  ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                  Column {
+                    width: queueFlick.availableWidth
+                    spacing: Style.space(4)
+
                 Repeater {
                   model: root.service ? root.service.queue : []
                   delegate: BorderSurface {
@@ -614,6 +627,8 @@ BarWidget {
                   font.family: root.bar.fontFamily
                   font.pixelSize: Style.font.caption
                   width: parent.width
+                }
+                  }
                 }
               }
   

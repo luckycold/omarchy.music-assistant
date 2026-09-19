@@ -188,7 +188,7 @@ Item {
         }
       }
 
-      PanelSlider {
+      ProgressSlider {
         id: progressSlider
         width: parent.width
         minimum: 0
