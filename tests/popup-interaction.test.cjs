@@ -30,16 +30,18 @@ test('Now keeps the queue in the same scroll view and drops the Queue tab', () =
   assert.match(queue, /hoverEnabled: true/);
 });
 
-test('overflowing list titles scroll on hover and reset when the hover ends', () => {
+test('overflowing list titles circular-scroll on hover and reset when the hover ends', () => {
   const row = fs.readFileSync(require('node:path').join(__dirname, '../SearchResultRow.qml'), 'utf8');
   const marquee = fs.readFileSync(require('node:path').join(__dirname, '../HoverMarquee.qml'), 'utf8');
   assert.match(row, /HoverMarquee/);
   assert.match(row, /hoverEnabled: true/);
   assert.match(marquee, /clip: true/);
-  assert.match(marquee, /NumberAnimation on x/);
+  assert.match(marquee, /id: copy/);
+  assert.match(marquee, /SequentialAnimation/);
+  assert.match(marquee, /PauseAnimation/);
   assert.match(marquee, /running: root\.hovered && /);
   const handler = marquee.match(/onRunningChanged: ([^\n]+)/);
-  const label = {x: -40};
-  vm.runInNewContext(handler[1], {running: false, label});
-  assert.equal(label.x, 0);
+  const ticker = {x: -40};
+  vm.runInNewContext(handler[1], {running: false, ticker});
+  assert.equal(ticker.x, 0);
 });

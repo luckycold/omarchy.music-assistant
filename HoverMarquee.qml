@@ -11,6 +11,10 @@ Item {
   property bool fontBold: false
   property bool hovered: false
 
+  readonly property bool scrolling: root.hovered && full.implicitWidth > root.width
+  readonly property int gap: Math.max(40, root.fontPixelSize * 3)
+  readonly property int shift: full.implicitWidth + root.gap
+
   clip: true
   implicitHeight: label.implicitHeight
   visible: root.text !== ""
@@ -25,28 +29,48 @@ Item {
     font.bold: root.fontBold
   }
 
-  Text {
-    id: label
-    textFormat: Text.PlainText
-    text: root.text
-    color: root.color
-    font.family: root.fontFamily
-    font.pixelSize: root.fontPixelSize
-    font.bold: root.fontBold
-    elide: scrolling ? Text.ElideNone : Text.ElideRight
-    width: scrolling ? full.implicitWidth : root.width
-    y: Math.max(0, (root.height - implicitHeight) / 2)
+  Row {
+    id: ticker
+    spacing: root.gap
+    y: Math.max(0, (root.height - label.implicitHeight) / 2)
 
-    readonly property bool scrolling: root.hovered && full.implicitWidth > root.width
-
-    NumberAnimation on x {
-      running: root.hovered && full.implicitWidth > root.width
-      from: 0
-      to: root.width - full.implicitWidth
-      duration: Math.max(2500, (full.implicitWidth - root.width) * 28)
-      loops: Animation.Infinite
-      easing.type: Easing.Linear
-      onRunningChanged: if (!running) label.x = 0
+    Text {
+      id: label
+      textFormat: Text.PlainText
+      text: root.text
+      color: root.color
+      font.family: root.fontFamily
+      font.pixelSize: root.fontPixelSize
+      font.bold: root.fontBold
+      elide: root.scrolling ? Text.ElideNone : Text.ElideRight
+      width: root.scrolling ? implicitWidth : root.width
     }
+
+    Text {
+      id: copy
+      visible: root.scrolling
+      textFormat: Text.PlainText
+      text: root.text
+      color: root.color
+      font.family: root.fontFamily
+      font.pixelSize: root.fontPixelSize
+      font.bold: root.fontBold
+    }
+  }
+
+  SequentialAnimation {
+    running: root.hovered && full.implicitWidth > root.width
+    loops: Animation.Infinite
+    PauseAnimation { duration: 700 }
+    NumberAnimation {
+      target: ticker
+      property: "x"
+      from: 0
+      to: -root.shift
+      duration: Math.max(2500, root.shift * 18)
+      easing.type: Easing.Linear
+    }
+    ScriptAction { script: ticker.x = 0 }
+    onRunningChanged: if (!running) ticker.x = 0
   }
 }
