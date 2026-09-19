@@ -39,6 +39,7 @@ test('favorite icon is an outline heart until the current track is favorited', (
 
 test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(source, /id: queueFlick/);
+  assert.match(source, /popupSection === "now" \? ScrollBar.AlwaysOff : ScrollBar.AsNeeded/);
   const queue = source.slice(source.indexOf('// ------------------ Queue section'), source.indexOf('// ------------------ Search section'));
   assert.match(queue, /visible: root\.popupSection === "now"/);
   assert.match(queue, /ScrollView/);

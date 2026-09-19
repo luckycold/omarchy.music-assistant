@@ -248,7 +248,7 @@ BarWidget {
             anchors.fill: parent
             clip: true
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-            ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+            ScrollBar.vertical.policy: root.popupSection === "now" ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
 
             Column {
               id: contentColumn
