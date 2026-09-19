@@ -58,6 +58,15 @@ BarWidget {
 
   property real maxLabelWidth: 290
   property real popupWidth: 380
+  property bool queueExpanded: false
+  readonly property int compactPopupHeight: 320
+  readonly property int expandedPopupHeight: {
+    var screenH = 900
+    if (root.QsWindow && root.QsWindow.window)
+      screenH = root.QsWindow.window.height
+    return Math.max(root.compactPopupHeight, Math.min(Math.round(screenH * 0.85), screenH - 96))
+  }
+  readonly property int popupBodyHeight: root.queueExpanded ? root.expandedPopupHeight : root.compactPopupHeight
   property string searchFilter: "all"
   property string favFilter: "tracks"
 
@@ -163,9 +172,10 @@ BarWidget {
     focusTarget: root.popupSection === "search" ? searchInput : popupFocus
     open: root.popupOpen
     contentWidth: popup.fittedContentWidth(Style.space(root.popupWidth))
-    contentHeight: popup.fittedContentHeight(Math.max(sidebar.implicitHeight, 320), 560)
+    contentHeight: popup.fittedContentHeight(Math.max(sidebar.implicitHeight, root.popupBodyHeight), root.expandedPopupHeight)
 
     onOpenChanged: {
+      if (!open) root.queueExpanded = false
       if (open && root.service) {
         if (typeof root.service.refreshState === "function") root.service.refreshState()
         root.activatePopupSection()
@@ -203,7 +213,7 @@ BarWidget {
 
       Row {
         id: popupRow
-        height: 320
+        height: root.popupBodyHeight
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
@@ -509,6 +519,13 @@ BarWidget {
                     anchors.verticalCenter: parent.verticalCenter
                   }
                   Item { width: 1; height: 1 }
+                  Button {
+                    text: root.queueExpanded ? "Collapse" : "Expand"
+                    foreground: root.bar.foreground
+                    horizontalPadding: Style.spacing.controlPaddingX
+                    verticalPadding: Style.spacing.controlPaddingY
+                    onClicked: root.queueExpanded = !root.queueExpanded
+                  }
                   Button {
                     text: "Clear"
                     foreground: root.bar.foreground
