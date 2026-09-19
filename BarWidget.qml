@@ -1041,7 +1041,7 @@ BarWidget {
       anchors.bottomMargin: 4
       color: Color.popups.background
       border.width: 1
-      border.color: Color.accent
+      border.color: Border.color(Border.controlSpec("normal", root.bar.foreground, Color.accent))
       Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
       Text {
         anchors.centerIn: parent
