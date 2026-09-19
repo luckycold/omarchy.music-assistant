@@ -195,18 +195,21 @@ Item {
         onMoved: root.seek(value)
       }
 
-      Row {
+      Item {
         width: parent.width
+        height: elapsedLabel.implicitHeight
         Text {
+          id: elapsedLabel
           textFormat: Text.PlainText
+          anchors.left: parent.left
           text: formatTime(root.elapsed)
           color: Qt.darker(root.bar.foreground, 1.3)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
         }
-        Item { width: 1; height: 1 }
         Text {
           textFormat: Text.PlainText
+          anchors.right: parent.right
           text: formatTime(root.duration)
           color: Qt.darker(root.bar.foreground, 1.3)
           font.family: root.bar.fontFamily

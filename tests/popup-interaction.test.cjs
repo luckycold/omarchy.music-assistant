@@ -11,6 +11,15 @@ test('stopping the title marquee resets its offset', () => {
   assert.equal(labelText.x, 0);
 });
 
+test('elapsed and duration sit on opposite ends of the progress row', () => {
+  const controls = fs.readFileSync(require('node:path').join(__dirname, '../PlayerControls.qml'), 'utf8');
+  assert.match(controls, /text: formatTime\(root\.elapsed\)/);
+  assert.match(controls, /text: formatTime\(root\.duration\)/);
+  assert.match(controls, /anchors\.left: parent\.left/);
+  assert.match(controls, /anchors\.right: parent\.right/);
+  assert.doesNotMatch(controls, /Item \{ width: 1; height: 1 \}/);
+});
+
 test('favorite icon is an outline heart until the current track is favorited', () => {
   const controls = fs.readFileSync(require('node:path').join(__dirname, '../PlayerControls.qml'), 'utf8');
   assert.match(controls, /iconText: root\.isFavorite \? "󰋑" : "󰋕"/);
