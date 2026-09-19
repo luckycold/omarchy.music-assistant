@@ -522,10 +522,14 @@ BarWidget {
                   }
                 }
 
+                Item {
+                  id: queuePane
+                  width: parent.width
+                  height: Math.max(Style.space(72), popupRow.height - nowPlayer.implicitHeight - Style.space(56))
+
                 ScrollView {
                   id: queueFlick
-                  width: parent.width
-                  height: Math.max(Style.space(72), popupRow.height - nowPlayer.implicitHeight - expandQueueBtn.implicitHeight - Style.space(72))
+                  anchors.fill: parent
                   clip: true
                   ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                   ScrollBar.vertical.policy: ScrollBar.AsNeeded
@@ -632,15 +636,34 @@ BarWidget {
                 }
                   }
                 }
-                Button {
+                Rectangle {
                   id: expandQueueBtn
-                  width: parent.width
-                  iconText: root.queueExpanded ? "󰅃" : "󰅀"
-                  foreground: root.bar.foreground
-                  horizontalPadding: Style.spacing.controlPaddingX
-                  verticalPadding: Style.spacing.controlPaddingY
+                  z: 2
+                  width: Style.space(32)
+                  height: Style.space(32)
+                  radius: width / 2
+                  anchors.horizontalCenter: queuePane.horizontalCenter
+                  anchors.bottom: queuePane.bottom
+                  anchors.bottomMargin: Style.space(8)
+                  color: "transparent"
+                  border.width: 1
+                  border.color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.45)
                   Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
-                  onClicked: root.queueExpanded = !root.queueExpanded
+                  Text {
+                    anchors.centerIn: parent
+                    textFormat: Text.PlainText
+                    text: root.queueExpanded ? "󰅃" : "󰅀"
+                    color: root.bar.foreground
+                    font.family: root.bar.fontFamily
+                    font.pixelSize: Style.font.body
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.queueExpanded = !root.queueExpanded
+                  }
+                }
                 }
               }
 

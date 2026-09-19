@@ -51,7 +51,9 @@ test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(queue, /HoverMarquee/);
   assert.match(queue, /hoverEnabled: true/);
   assert.match(queue, /id: expandQueueBtn/);
-  assert.match(queue, /iconText: root\.queueExpanded \? "󰅃" : "󰅀"/);
+  assert.match(queue, /radius: width \/ 2/);
+  assert.match(queue, /color: "transparent"/);
+  assert.match(queue, /text: root\.queueExpanded \? "󰅃" : "󰅀"/);
   assert.match(source, /popup.availableCardHeight/);
   assert.doesNotMatch(source, /text: root\.queueExpanded \? "Collapse" : "Expand"/);
 });
