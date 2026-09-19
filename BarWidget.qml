@@ -299,6 +299,7 @@ BarWidget {
                   elapsed: root.elapsed
                   duration: root.duration
                   isPlaying: root.isPlaying
+                  isFavorite: root.service ? root.service.isFavorite : false
                   shuffleEnabled: root.service ? root.service.shuffleEnabled : false
                   repeatMode: root.service ? root.service.repeatMode : "off"
                   onPlayPause: if (root.service) root.service.playPause()

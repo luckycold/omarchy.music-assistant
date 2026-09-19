@@ -8,7 +8,7 @@ StartLimitIntervalSec=0
 Type=simple
 WorkingDirectory=%h/.local/share/omarchy-ma-player
 ExecStart=%h/.local/share/omarchy-ma-player/venv/bin/python %h/.local/share/omarchy-ma-player/native_daemon.py
-Environment=PULSE_PROP_application.name=Music Assistant
+Environment=PULSE_PROP_application.name=music-assistant
 Environment=PULSE_PROP_media.role=music
 Restart=on-failure
 RestartSec=5

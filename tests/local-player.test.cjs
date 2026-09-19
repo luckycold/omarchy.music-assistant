@@ -68,6 +68,17 @@ test('play on this device installs when the helper is missing', () => {
   assert.equal(installs, 1);
 });
 
+test('web UI opens https URLs with the browser launcher and ignores tokens', () => {
+  const webUiProc = {command: [], running: false};
+  const root = {config: {url: 'https://ma.example.test', token: 'TOP_SECRET'}, webUiUrl() { return method('webUiUrl', root)(); }};
+  assert.equal(method('webUiUrl', root)(), 'https://ma.example.test');
+  method('openWebUI', root, {webUiProc})();
+  assert.equal(JSON.stringify(webUiProc.command), JSON.stringify(['omarchy-launch-browser', 'https://ma.example.test']));
+  assert.ok(!JSON.stringify(webUiProc.command).includes('TOP_SECRET'));
+  root.config.url = 'javascript:alert(1)';
+  assert.equal(method('webUiUrl', root)(), '');
+});
+
 test('installer command is bash plus install.sh and never includes a token', () => {
   const installerProc = {command: [], running: false};
   const root = {localControlBusy: false, installerPath: '/tmp/plugin/local-player/install.sh', requestFailed() {}};

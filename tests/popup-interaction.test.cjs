@@ -11,6 +11,12 @@ test('stopping the title marquee resets its offset', () => {
   assert.equal(labelText.x, 0);
 });
 
+test('favorite icon is an outline heart until the current track is favorited', () => {
+  const controls = fs.readFileSync(require('node:path').join(__dirname, '../PlayerControls.qml'), 'utf8');
+  assert.match(controls, /iconText: root\.isFavorite \? "󰋑" : "󰋕"/);
+  assert.doesNotMatch(controls, /󰥂/);
+});
+
 test('Now keeps the queue in the same scroll view and drops the Queue tab', () => {
   assert.equal((source.match(/ScrollView\s*\{/g) || []).length, 1);
   const queue = source.slice(source.indexOf('// ------------------ Queue section'), source.indexOf('// ------------------ Search section'));
@@ -19,4 +25,5 @@ test('Now keeps the queue in the same scroll view and drops the Queue tab', () =
   assert.match(source, /KeyboardPanel\s*\{/);
   assert.match(source, /text: "Play on this device"/);
   assert.match(source, /onClicked: root\.service\.playOnThisDevice\(\)/);
+  assert.match(source, /isFavorite: root\.service \? root\.service\.isFavorite : false/);
 });

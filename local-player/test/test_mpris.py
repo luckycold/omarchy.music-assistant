@@ -53,6 +53,13 @@ class MprisTest(unittest.TestCase):
             self.adapter.action('Play')
         self.assertEqual(self.bridge.calls, [])
 
+    def test_missing_volume_still_publishes(self):
+        self.bridge.player = {'player_id': 'local', 'available': True}
+        ident, props = self.adapter.snapshot()
+        self.assertEqual(ident, 'local')
+        self.assertEqual(props['Volume'], 1.0)
+        self.assertEqual(props['PlaybackStatus'], 'Playing')
+
 
 if __name__ == '__main__':
     unittest.main()

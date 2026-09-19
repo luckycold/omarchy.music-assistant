@@ -161,14 +161,11 @@ class Adapter:
 
     def snapshot(self):
         ident, q, player = self.resolve()
+        raw_volume = player.get('volume_level')
         try:
-            raw_volume = player.get('volume_level')
-            if isinstance(raw_volume, bool) or not isinstance(raw_volume, (int, float)):
-                raise Unsupported()
-            normalized_volume(raw_volume)
-            volume = normalized_volume(raw_volume / 100)
+            volume = normalized_volume(raw_volume / 100) if isinstance(raw_volume, (int, float)) and not isinstance(raw_volume, bool) else 1.0
         except Unsupported:
-            raise Unavailable() from None
+            volume = 1.0
         state = {'playing': 'Playing', 'paused': 'Paused'}.get(q.get('state'), 'Stopped')
         count = q.get('items')
         count = count if isinstance(count, int) and not isinstance(count, bool) and count > 0 else 0

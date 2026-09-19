@@ -210,6 +210,12 @@ Item {
   }
 
   Process {
+    id: webUiProc
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+  }
+
+  Process {
     id: installerProc
     stdout: StdioCollector { waitForEnd: true }
     stderr: StdioCollector { waitForEnd: true }
@@ -318,6 +324,18 @@ Item {
   readonly property string activeImageUrl: MaApi.trackImageUrl(activeMedia)
   readonly property int activeDuration: activeMedia && activeMedia.duration ? Math.round(activeMedia.duration * 1000) : 0
   readonly property int activeElapsed: activeMedia && activeMedia.elapsed_time ? Math.round(activeMedia.elapsed_time * 1000) : 0
+  readonly property bool isFavorite: {
+    var m = root.activeMedia
+    if (!m) return false
+    if (m.favorite === true) return true
+    var uri = m.uri
+    var tracks = root.favorites && root.favorites.tracks
+    if (!uri || !tracks) return false
+    for (var i = 0; i < tracks.length; i++) {
+      if (tracks[i] && tracks[i].uri === uri) return true
+    }
+    return false
+  }
 
   // ---------------------------------------------------------------- config loader
 
@@ -1119,11 +1137,20 @@ Item {
     root.showOsd("Favorited", "favorite", MaApi.trackTitle(m))
   }
 
+  function webUiUrl() {
+    var url = root.config && root.config.openWebUiPath && root.config.openWebUiPath.length > 0
+      ? root.config.openWebUiPath : (root.config && root.config.url ? root.config.url : "")
+    if (typeof url !== "string") return ""
+    url = url.trim()
+    if ((url.indexOf("http://") !== 0 && url.indexOf("https://") !== 0) || url.length > 2048) return ""
+    return url
+  }
+
   function openWebUI() {
-    if (!shell) return
-    var url = root.config.openWebUiPath && root.config.openWebUiPath.length > 0
-      ? root.config.openWebUiPath : root.config.url
-    shell.summon("browser", url)
+    var url = root.webUiUrl()
+    if (!url || webUiProc.running) return
+    webUiProc.command = ["omarchy-launch-browser", url]
+    webUiProc.running = true
   }
 
   function refreshFavorites() {
