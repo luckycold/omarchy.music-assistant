@@ -569,31 +569,30 @@ BarWidget {
                         width: parent.width - Style.space(58)
                         spacing: Style.space(1)
                         anchors.verticalCenter: parent.verticalCenter
-                        Text {
-                          textFormat: Text.PlainText
-                          text: queueRow.modelData.name || queueRow.modelData.title || queueRow.modelData.uri || "?"
+                        HoverMarquee {
+                          width: parent.width
+                          text: queueRow.modelData.title || queueRow.modelData.name || queueRow.modelData.uri || "?"
                           color: root.bar.foreground
-                          font.family: root.bar.fontFamily
-                          font.pixelSize: Style.font.bodySmall
-                          font.bold: queueRow.isCurrent
-                          elide: Text.ElideRight
-                          width: parent.width
+                          fontFamily: root.bar.fontFamily
+                          fontPixelSize: Style.font.bodySmall
+                          fontBold: queueRow.isCurrent
+                          hovered: queueHover.containsMouse
                         }
-                        Text {
-                          textFormat: Text.PlainText
-                          text: queueRow.modelData.artist || queueRow.modelData.uri || ""
-                          color: Qt.darker(root.bar.foreground, 1.4)
-                          font.family: root.bar.fontFamily
-                          font.pixelSize: Style.font.caption
-                          elide: Text.ElideRight
+                        HoverMarquee {
                           width: parent.width
-                          visible: text !== ""
+                          text: queueRow.modelData.artist || ""
+                          color: Qt.darker(root.bar.foreground, 1.4)
+                          fontFamily: root.bar.fontFamily
+                          fontPixelSize: Style.font.caption
+                          hovered: queueHover.containsMouse
                         }
                       }
                     }
   
                     MouseArea {
+                      id: queueHover
                       anchors.fill: parent
+                      hoverEnabled: true
                       cursorShape: Qt.PointingHandCursor
                       acceptedButtons: Qt.LeftButton | Qt.RightButton
                       onClicked: function(mouse) {

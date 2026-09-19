@@ -26,4 +26,20 @@ test('Now keeps the queue in the same scroll view and drops the Queue tab', () =
   assert.match(source, /text: "Play on this device"/);
   assert.match(source, /onClicked: root\.service\.playOnThisDevice\(\)/);
   assert.match(source, /isFavorite: root\.service \? root\.service\.isFavorite : false/);
+  assert.match(queue, /HoverMarquee/);
+  assert.match(queue, /hoverEnabled: true/);
+});
+
+test('overflowing list titles scroll on hover and reset when the hover ends', () => {
+  const row = fs.readFileSync(require('node:path').join(__dirname, '../SearchResultRow.qml'), 'utf8');
+  const marquee = fs.readFileSync(require('node:path').join(__dirname, '../HoverMarquee.qml'), 'utf8');
+  assert.match(row, /HoverMarquee/);
+  assert.match(row, /hoverEnabled: true/);
+  assert.match(marquee, /clip: true/);
+  assert.match(marquee, /NumberAnimation on x/);
+  assert.match(marquee, /running: root\.hovered && /);
+  const handler = marquee.match(/onRunningChanged: ([^\n]+)/);
+  const label = {x: -40};
+  vm.runInNewContext(handler[1], {running: false, label});
+  assert.equal(label.x, 0);
 });

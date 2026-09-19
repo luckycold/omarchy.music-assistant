@@ -50,22 +50,22 @@ BorderSurface {
 
     Item {
       width: parent.width - Style.space(36)
-      height: titleText.implicitHeight
+      height: titleMarquee.implicitHeight
       anchors.verticalCenter: parent.verticalCenter
 
-      Text {
-        textFormat: Text.PlainText
-        id: titleText
+      HoverMarquee {
+        id: titleMarquee
         anchors.left: parent.left
         anchors.right: badges.left
         anchors.rightMargin: Style.space(6)
+        height: implicitHeight
         anchors.verticalCenter: parent.verticalCenter
         text: root.title || "?"
         color: root.bar.foreground
-        font.family: root.bar.fontFamily
-        font.pixelSize: Style.font.bodySmall
-        font.bold: true
-        elide: Text.ElideRight
+        fontFamily: root.bar.fontFamily
+        fontPixelSize: Style.font.bodySmall
+        fontBold: true
+        hovered: rowHover.containsMouse
       }
 
       Row {
@@ -115,8 +115,7 @@ BorderSurface {
     }
   }
 
-  Text {
-    textFormat: Text.PlainText
+  HoverMarquee {
     visible: root.subtitle !== ""
     anchors.left: parent.left
     anchors.right: parent.right
@@ -126,13 +125,15 @@ BorderSurface {
     anchors.topMargin: Style.space(-2)
     text: root.subtitle
     color: Qt.darker(root.bar.foreground, 1.4)
-    font.family: root.bar.fontFamily
-    font.pixelSize: Style.font.caption
-    elide: Text.ElideRight
+    fontFamily: root.bar.fontFamily
+    fontPixelSize: Style.font.caption
+    hovered: rowHover.containsMouse
   }
 
   MouseArea {
+    id: rowHover
     anchors.fill: parent
+    hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
     acceptedButtons: Qt.LeftButton | Qt.RightButton
     onClicked: function(mouse) {
