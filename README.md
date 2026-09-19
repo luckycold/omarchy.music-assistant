@@ -111,7 +111,7 @@ and reconnect/suspend behavior on the intended desktop before claiming those wor
 ## Features
 
 - Live now-playing in the bar with auto-scrolling label
-- Popup with 7 tabs: Now, Players, Queue, Search, Favorites, Playlists, Recent
+- Popup with 6 tabs: Now (player controls and queue), Players, Search, Favorites, Playlists, Recent
 - Transport: play/pause, next/previous, seek (click progress bar)
 - Shuffle and repeat (off / all / one) toggles
 - Per-player volume slider with mute toggle
@@ -120,7 +120,7 @@ and reconnect/suspend behavior on the intended desktop before claiming those wor
 - Favorites: browse and play liked items, right-click to remove
 - Playlists: list user playlists, click to play
 - Recent: browse recently played items
-- "Save queue as playlist" from the Queue tab
+- Queue beneath the Now player controls: jump to a track, right-click to remove, or clear the queue
 - Polling for live state (2s default interval; HTTP or local helper transport)
 - IPC handlers for all actions (see table below)
 
@@ -227,7 +227,7 @@ When the popup is open:
 | Key | Action |
 |-----|--------|
 | `Escape` | Close popup |
-| `Ctrl+1` … `Ctrl+7` | Jump to sidebar tab (Now, Players, Queue, Search, Favorites, Playlists, Recent) |
+| `Ctrl+1` … `Ctrl+6` | Jump to sidebar tab (Now, Players, Search, Favorites, Playlists, Recent) |
 | `Tab` / `Shift+Tab` | Cycle tabs |
 | `Space` | Play/pause (Now tab) |
 | `↑` / `↓` | Move focus in lists |

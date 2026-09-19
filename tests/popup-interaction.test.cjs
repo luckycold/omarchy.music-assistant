@@ -8,3 +8,20 @@ for(const section of ['favorites','playlists','recent'])test('entering '+section
 test('search focus follows the scope, never gets replaced by scope afterwards',()=>{let r=rig('search');r.run();r.flush();assert.deepEqual(r.calls,['scope','input']);});
 test('closed or disconnected popup does not issue library RPCs',()=>{for(const [open,connected]of [[false,true],[true,false]]){let r=rig('favorites',open,connected);r.run();r.flush();assert.ok(!r.calls.includes('favorites'));}});
 test('deferred focus honors closing or switching away from search',()=>{let r=rig('search');r.run();r.root.popupOpen=false;r.flush();assert.deepEqual(r.calls,[]);r=rig('search');r.run();r.root.popupSection='now';r.flush();assert.deepEqual(r.calls,['scope']);});
+test('Now includes the existing queue below its player controls in the same scroll view',()=>{
+  const queue=source.slice(source.indexOf('// ------------------ Queue section'),source.indexOf('// ------------------ Search section'));
+  assert.match(queue,/visible: root\.popupSection === "now"/);
+  assert.ok(source.indexOf('PlayerControls {')<source.indexOf('// ------------------ Queue section'));
+  assert.equal((source.match(/ScrollView\s*\{/g)||[]).length,1);
+  for(const action of ['clearQueue','deleteQueueItem','playIndex']) assert.ok(queue.includes('root.service.'+action+'('));
+});
+test('Now uses a music-note icon rather than the Facebook glyph',()=>{
+  assert.match(source,/\{ id: "now", icon: "󰝚", label: "Now" \}/);
+});
+test('sidebar and keyboard navigation omit the separate Queue section',()=>{
+  assert.doesNotMatch(source,/\{ id: "queue",/);
+  for(const name of ['tabs','tabs2']) {
+    const match=source.match(new RegExp('var '+name+' = (\\[[^\\n]+\\])'));
+    assert.ok(match);assert.deepEqual(JSON.parse(match[1]),['now','players','search','favorites','playlists','recent']);
+  }
+});

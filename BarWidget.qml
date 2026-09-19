@@ -28,7 +28,7 @@ BarWidget {
   readonly property int elapsed: service ? service.activeElapsed : 0
   readonly property int revision: service ? service.revision : 0
 
-  // Active popup section: "now", "players", "queue", "search"
+  // Active popup section: "now", "players", "search", "favorites", "playlists", "recent"
   property string popupSection: "now"
   property bool popupOpen: false
 
@@ -57,7 +57,7 @@ BarWidget {
   function close() { popupOpen = false }
   function openSection(s) { popupSection = s; popupOpen = true }
 
-  property real maxLabelWidth: 180
+  property real maxLabelWidth: 290
   property real popupWidth: 380
   property string searchFilter: "all"
   property string favFilter: "tracks"
@@ -182,14 +182,14 @@ BarWidget {
           root.popupOpen = false
           event.accepted = true
         } else if (event.modifiers === Qt.ControlModifier) {
-          var tabs = ["now", "players", "queue", "search", "favorites", "playlists", "recent"]
+          var tabs = ["now", "players", "search", "favorites", "playlists", "recent"]
           var n = parseInt(event.text)
           if (!isNaN(n) && n >= 1 && n <= tabs.length) {
             root.popupSection = tabs[n - 1]
             event.accepted = true
           }
         } else if (event.key === Qt.Key_Tab) {
-          var tabs2 = ["now", "players", "queue", "search", "favorites", "playlists", "recent"]
+          var tabs2 = ["now", "players", "search", "favorites", "playlists", "recent"]
           var idx = tabs2.indexOf(root.popupSection)
           if (event.modifiers === Qt.ShiftModifier) idx = (idx - 1 + tabs2.length) % tabs2.length
           else idx = (idx + 1) % tabs2.length
@@ -218,9 +218,8 @@ BarWidget {
   
           Repeater {
             model: [
-              { id: "now", icon: "", label: "Now" },
+              { id: "now", icon: "󰝚", label: "Now" },
               { id: "players", icon: "", label: "Players" },
-              { id: "queue", icon: "", label: "Queue" },
               { id: "search", icon: "", label: "Search" },
               { id: "favorites", icon: "󰎠", label: "Favs" },
               { id: "playlists", icon: "󰃶", label: "Lists" },
@@ -489,7 +488,7 @@ BarWidget {
               Column {
                 width: parent.width
                 spacing: Style.space(4)
-                visible: root.popupSection === "queue"
+                visible: root.popupSection === "now"
                 enabled: root.serviceConnected
   
                 Row {
