@@ -55,7 +55,8 @@ test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(source, /anchors\.right: popupRow\.right/);
   assert.match(source, /anchors\.bottom: popupRow\.bottom/);
   assert.match(source, /radius: height \/ 2/);
-  assert.match(source, /color: Qt\.rgba\(root\.bar\.foreground\.r, root\.bar\.foreground\.g, root\.bar\.foreground\.b, 0\.55\)/);
+  assert.match(source, /color: Color\.popups\.background/);
+  assert.match(source, /border\.color: Color\.accent/);
   assert.match(source, /text: root\.queueExpanded \? "󰅃" : "󰅀"/);
   assert.doesNotMatch(source, /id: queueFooter/);
   assert.doesNotMatch(source, /radius: width \/ 2/);
