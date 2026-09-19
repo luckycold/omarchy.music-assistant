@@ -321,7 +321,7 @@ BarWidget {
                 Column {
                   width: parent.width
                   spacing: Style.space(6)
-                  visible: root.service && root.service.localPlayerEnabled
+                  visible: !!root.service
                   Text {
                     textFormat: Text.PlainText
                     width: parent.width
@@ -338,8 +338,16 @@ BarWidget {
                     width: parent.width
                     spacing: Style.space(4)
                     Button {
+                      text: "Play on this laptop"
+                      foreground: root.bar.foreground
+                      enabled: root.serviceReady && !root.service.localControlBusy && !root.service.playHerePending
+                      opacity: enabled ? 1 : 0.4
+                      onClicked: root.service.playOnThisDevice()
+                    }
+                    Button {
                       text: "Start"
                       foreground: root.bar.foreground
+                      visible: root.service && root.service.localPlayerEnabled
                       enabled: root.serviceReady && !root.service.localControlBusy && !root.service.localPlayerReady
                       opacity: enabled ? 1 : 0.4
                       onClicked: root.service.startLocalPlayer()
@@ -347,6 +355,7 @@ BarWidget {
                     Button {
                       text: "Stop"
                       foreground: root.bar.foreground
+                      visible: root.service && root.service.localPlayerEnabled
                       enabled: root.serviceReady && !root.service.localControlBusy
                       opacity: enabled ? 1 : 0.4
                       onClicked: root.service.stopLocalPlayer()
@@ -354,23 +363,18 @@ BarWidget {
                     Button {
                       text: "Restart"
                       foreground: root.bar.foreground
+                      visible: root.service && root.service.localPlayerEnabled
                       enabled: root.serviceReady && !root.service.localControlBusy
                       opacity: enabled ? 1 : 0.4
                       onClicked: root.service.restartLocalPlayer()
-                    }
-                    Button {
-                      text: "Play here"
-                      foreground: root.bar.foreground
-                      // May start the helper; playback controls remain gated on readiness.
-                      enabled: root.serviceReady && !root.service.localControlBusy && !root.service.playHerePending
-                      opacity: enabled ? 1 : 0.4
-                      onClicked: root.service.playHere()
                     }
                   }
                   Text {
                     textFormat: Text.PlainText
                     width: parent.width
-                    text: "Play here selects this laptop without moving another queue."
+                    text: root.service && root.service.localPlayerEnabled
+                      ? "Play on this laptop selects this machine without moving another queue."
+                      : "Installs the helper if needed, then plays on this laptop."
                     wrapMode: Text.WordWrap
                     color: Qt.darker(root.bar.foreground, 1.4)
                     font.family: root.bar.fontFamily

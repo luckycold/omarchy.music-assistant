@@ -17,4 +17,6 @@ test('Now keeps the queue in the same scroll view and drops the Queue tab', () =
   assert.match(queue, /visible: root\.popupSection === "now"/);
   assert.doesNotMatch(source, /\{ id: "queue",/);
   assert.match(source, /KeyboardPanel\s*\{/);
+  assert.match(source, /text: "Play on this laptop"/);
+  assert.match(source, /onClicked: root\.service\.playOnThisDevice\(\)/);
 });

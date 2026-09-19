@@ -53,6 +53,29 @@ test('play here selects the laptop without transferring a queue', () => {
   assert.doesNotMatch(fn.toString(), /transferQueue|play_media/);
 });
 
+test('play on this device refuses without a Remote ID', () => {
+  const root = {ready: true, localControlBusy: false, config: {localPlayer: {enabled: false, remoteId: ''}},
+    requestFailed() {}, startInstaller() { assert.fail('installed'); }};
+  assert.equal(method('playOnThisDevice', root)(), 'LOCAL_PLAYER_NEEDS_REMOTE_ID');
+});
+
+test('play on this device installs when the helper is missing', () => {
+  let installs = 0;
+  const root = {ready: true, localControlBusy: false, helperInstalled: false, localPlayerEnabled: false,
+    config: {localPlayer: {remoteId: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'}}, requestFailed() {},
+    startInstaller: () => { installs++; return 'ok'; }, startLocalPlayer() { assert.fail('started'); }};
+  assert.equal(method('playOnThisDevice', root)(), 'ok');
+  assert.equal(installs, 1);
+});
+
+test('installer command is bash plus install.sh and never includes a token', () => {
+  const installerProc = {command: [], running: false};
+  const root = {localControlBusy: false, installerPath: '/tmp/plugin/local-player/install.sh', requestFailed() {}};
+  assert.equal(method('startInstaller', root, {installerProc, installerTimeout: {restart() {}}})(), 'ok');
+  assert.equal(JSON.stringify(installerProc.command), JSON.stringify(['bash', root.installerPath]));
+  assert.ok(!JSON.stringify(installerProc.command).includes('token'));
+});
+
 test('status is not ready without phase, identity, and a clean error', () => {
   const decode = method('decodeLocalStatus', {});
   const id = 'a'.repeat(43);

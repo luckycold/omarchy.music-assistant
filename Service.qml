@@ -45,7 +45,12 @@ Item {
   readonly property bool localPlayerSelected: root.localPlayerEnabled && root.localPlayerId.length > 0 && root.activePlayerId === root.localPlayerId
   property bool localControlBusy: false
   property bool playHerePending: false
+  property bool helperInstalled: false
   property int requestEpoch: 0
+  readonly property string installerPath: {
+    var url = Qt.resolvedUrl("local-player/install.sh").toString()
+    return url.indexOf("file://") === 0 ? url.slice(7) : url
+  }
 
   function localPlayerStatus() {
     return JSON.stringify({ enabled: root.localPlayerEnabled, phase: root.localPlayerState.phase,
@@ -65,7 +70,7 @@ Item {
     var value = JSON.parse(String(text))
     if (!value || typeof value.ready !== "boolean" || typeof value.phase !== "string") throw new Error("INVALID_STATUS")
     var id = typeof value.playerId === "string" && /^[A-Za-z0-9_-]{43}$/.test(value.playerId) ? value.playerId : ""
-    var phases = ["idle", "unlocking", "remote-connecting", "authenticating", "opening-sendspin", "sdk-connecting", "pairing", "waiting-player", "ready", "failed", "disconnected", "starting", "reconnecting", "stopped"]
+    var phases = ["idle", "unlocking", "remote-connecting", "authenticating", "opening-sendspin", "sdk-connecting", "pairing", "waiting-player", "ready", "failed", "disconnected", "starting", "reconnecting", "stopped", "installing"]
     return { phase: phases.indexOf(value.phase) >= 0 ? value.phase : "connecting",
       ready: value.phase === "ready" && value.ready === true && !!id && !value.error, playerId: id, playing: value.playing === true,
       error: value.error ? "LOCAL_PLAYER_ERROR" : "" }
@@ -151,6 +156,86 @@ Item {
     if (root.localPlayerReady) root.selectLocalPlayer()
     else return root.startLocalPlayer()
     return "ok"
+  }
+
+  function playOnThisDevice() {
+    if (!root.ready) return "NOT_READY"
+    if (root.localControlBusy) return "LOCAL_PLAYER_BUSY"
+    var lp = root.config.localPlayer || {}
+    if (!lp.remoteId) return "LOCAL_PLAYER_NEEDS_REMOTE_ID"
+    root.playHerePending = true
+    root.requestFailed("")
+    if (root.localPlayerEnabled) {
+      if (root.localPlayerReady) {
+        root.selectLocalPlayer()
+        return "ok"
+      }
+      return root.startLocalPlayer()
+    }
+    if (root.helperInstalled) return root.enableAndStartLocalPlayer()
+    return root.startInstaller()
+  }
+
+  function enableAndStartLocalPlayer() {
+    if (!root.config.localPlayer) return "LOCAL_PLAYER_DISABLED"
+    var next = JSON.parse(JSON.stringify(root.config))
+    next.localPlayer.enabled = true
+    root.config = next
+    root.persistConfig()
+    return root.startLocalPlayer()
+  }
+
+  function startInstaller() {
+    if (root.localControlBusy) return "LOCAL_PLAYER_BUSY"
+    if (!root.installerPath || root.installerPath.indexOf("/local-player/install.sh") < 0)
+      return "LOCAL_INSTALL_MISSING"
+    root.localControlBusy = true
+    root.requestFailed("")
+    root.localPlayerState = ({ phase: "installing", ready: false, playing: false, error: "" })
+    installerProc.command = ["bash", root.installerPath]
+    installerTimeout.restart()
+    installerProc.running = true
+    return "ok"
+  }
+
+  function refreshHelperInstalled() {
+    if (helperCheckProc.running) return
+    helperCheckProc.command = ["test", "-x", root.localPlayerExecutable]
+    helperCheckProc.running = true
+  }
+
+  Process {
+    id: helperCheckProc
+    onExited: function(code) { root.helperInstalled = code === 0 }
+  }
+
+  Process {
+    id: installerProc
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(code) {
+      installerTimeout.stop()
+      root.localControlBusy = false
+      if (code !== 0) {
+        root.playHerePending = false
+        root.localPlayerState = ({ phase: "error", ready: false, playing: false, error: "LOCAL_INSTALL_FAILED" })
+        root.requestFailed("LOCAL_INSTALL_FAILED")
+        return
+      }
+      root.helperInstalled = true
+      root.enableAndStartLocalPlayer()
+    }
+  }
+  Timer {
+    id: installerTimeout
+    interval: 180000
+    onTriggered: {
+      installerProc.signal(9)
+      root.localControlBusy = false
+      root.playHerePending = false
+      root.localPlayerState = ({ phase: "error", ready: false, playing: false, error: "LOCAL_INSTALL_TIMEOUT" })
+      root.requestFailed("LOCAL_INSTALL_TIMEOUT")
+    }
   }
 
   function selectLocalPlayer() {
@@ -410,6 +495,7 @@ Item {
     if (root.ready) {
       root.startConnection()
       Qt.callLater(function() { root.installMediaKeysBindings() })
+      Qt.callLater(root.refreshHelperInstalled)
     } else {
       root.stopConnection()
       root.configError = result.error || "invalid config"
@@ -1087,6 +1173,7 @@ Item {
     function stopLocalPlayer(): string { return root.stopLocalPlayer() }
     function restartLocalPlayer(): string { return root.restartLocalPlayer() }
     function playHere(): string { return root.playHere() }
+    function playOnThisDevice(): string { return root.playOnThisDevice() }
     function enableLocalPlayer(): string { return root.enableLocalPlayer() }
     function disableLocalPlayer(): string { return root.disableLocalPlayer() }
 
