@@ -60,6 +60,8 @@ test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(source, /text: root\.queueExpanded \? "󰅃" : "󰅀"/);
   assert.doesNotMatch(source, /id: queueFooter/);
   assert.doesNotMatch(source, /radius: width \/ 2/);
+  assert.match(source, /onPopupSectionChanged: \{/);
+  assert.match(source, /root\.queueExpanded = false/);
   assert.match(source, /compactPopupHeight: 400/);
   assert.match(source, /popup.availableCardHeight/);
   assert.doesNotMatch(source, /text: root\.queueExpanded \? "Collapse" : "Expand"/);

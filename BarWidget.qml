@@ -32,6 +32,7 @@ BarWidget {
   property bool popupOpen: false
 
   onPopupSectionChanged: {
+    root.queueExpanded = false
     if (popupSection !== "search") searchFilter = "all"
     activatePopupSection()
   }
