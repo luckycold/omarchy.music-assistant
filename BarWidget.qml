@@ -59,7 +59,7 @@ BarWidget {
   property real maxLabelWidth: 290
   property real popupWidth: 380
   property bool queueExpanded: false
-  readonly property int compactPopupHeight: 320
+  readonly property int compactPopupHeight: 400
   readonly property int expandedPopupHeight: Math.max(root.compactPopupHeight, Math.round((popup.availableCardHeight > 0 ? popup.availableCardHeight : 720) * 0.92))
   readonly property int popupBodyHeight: root.queueExpanded ? root.expandedPopupHeight : root.compactPopupHeight
   property string searchFilter: "all"
@@ -639,15 +639,15 @@ BarWidget {
                 Rectangle {
                   id: expandQueueBtn
                   z: 2
-                  width: Style.space(32)
-                  height: Style.space(32)
+                  width: Style.space(20)
+                  height: Style.space(20)
                   radius: width / 2
                   anchors.horizontalCenter: queuePane.horizontalCenter
                   anchors.bottom: queuePane.bottom
-                  anchors.bottomMargin: Style.space(8)
-                  color: "transparent"
+                  anchors.bottomMargin: 2
+                  color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.22)
                   border.width: 1
-                  border.color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.45)
+                  border.color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.85)
                   Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
                   Text {
                     anchors.centerIn: parent
@@ -655,7 +655,7 @@ BarWidget {
                     text: root.queueExpanded ? "󰅃" : "󰅀"
                     color: root.bar.foreground
                     font.family: root.bar.fontFamily
-                    font.pixelSize: Style.font.body
+                    font.pixelSize: Style.font.caption
                   }
                   MouseArea {
                     anchors.fill: parent
