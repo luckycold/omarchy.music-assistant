@@ -50,9 +50,9 @@ test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(source, /isFavorite: root\.service \? root\.service\.isFavorite : false/);
   assert.match(queue, /HoverMarquee/);
   assert.match(queue, /hoverEnabled: true/);
+  assert.match(queue, /id: queueFooter/);
   assert.match(queue, /id: expandQueueBtn/);
   assert.match(queue, /width: Style\.space\(20\)/);
-  assert.match(queue, /anchors\.bottomMargin: 2/);
   assert.match(queue, /radius: width \/ 2/);
   assert.match(queue, /color: Qt\.rgba\(root\.bar\.foreground\.r, root\.bar\.foreground\.g, root\.bar\.foreground\.b, 0\.55\)/);
   assert.match(queue, /text: root\.queueExpanded \? "󰅃" : "󰅀"/);
