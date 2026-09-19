@@ -2,24 +2,22 @@
 set -euo pipefail
 umask 077
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-command -v node >/dev/null
-command -v npm >/dev/null
 command -v python3 >/dev/null
-command -v chromium >/dev/null
+python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'
 python3 -c 'import dbus; from gi.repository import GLib'
-node -e 'if(Number(process.versions.node.split(".")[0])<22)process.exit(1)'
-npm ci --no-audit --no-fund
-npm run check
 runtime="$HOME/.local/share/omarchy-ma-player"
 install -d -m 700 "$runtime" "$HOME/.local/state/music-assistant-player"
 install -d "$HOME/.local/bin" "$HOME/.config/systemd/user"
-install -m 600 dist/daemon.mjs dist/browser.js "$runtime/"
-if [[ -f dist/browser.js.LEGAL.txt ]]; then install -m 600 dist/browser.js.LEGAL.txt "$runtime/"; fi
-cp -R dist/licenses "$runtime/"
-install -m 600 NOTICE.md "$runtime/"
+if command -v uv >/dev/null; then
+  uv venv --python 3.12 "$runtime/venv"
+  uv pip install --python "$runtime/venv/bin/python" -r requirements.txt
+else
+  python3 -m venv "$runtime/venv"
+  "$runtime/venv/bin/pip" install -r requirements.txt
+fi
+install -m 600 remote_transport.py native_adapter.py native_daemon.py mpris.py "$runtime/"
 install -m 755 bin/omarchy-ma-player "$HOME/.local/bin/omarchy-ma-player"
-install -m 600 mpris.py "$runtime/mpris.py"
-install -m 600 omarchy-ma-player.service "$HOME/.config/systemd/user/omarchy-ma-player.service"
-install -m 600 omarchy-ma-mpris.service "$HOME/.config/systemd/user/omarchy-ma-mpris.service"
+install -m 600 omarchy-ma-player.service omarchy-ma-mpris.service "$HOME/.config/systemd/user/"
+PYTHONPATH=. "$runtime/venv/bin/python" -m unittest discover -s test -q
 systemctl --user daemon-reload
 printf '%s\n' 'Installed without starting or enabling. Configure localPlayer, then run omarchy-ma-player start.'

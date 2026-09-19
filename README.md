@@ -39,7 +39,7 @@ omarchy plugin add https://github.com/manologarciadev/omarchy.music-assistant.gi
 
 ## Optional local laptop playback
 
-Requires Node 22+, npm, Chromium, Python with `dbus-python` and PyGObject
+Requires Python 3.12+, `uv` or `pip`, PortAudio, Python D-Bus/PyGObject
 (`python-dbus` / `python-gobject` on Arch), a systemd user session, and working
 PipeWire/PulseAudio. Run as the desktop user, not root:
 
@@ -48,9 +48,10 @@ cd "$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/loca
 ./install.sh
 ```
 
-The installer builds/tests the helper, installs it outside the plugin directory,
-and registers its user services. It does not edit configuration or start playback.
-Add these settings to your private config, retaining `token`:
+The installer creates a private venv, installs the native Sendspin helper
+outside the plugin directory, and registers its user services. It does not edit
+configuration or start playback. Add these settings to your private config,
+retaining `token`:
 
 ```json
 {
@@ -81,11 +82,11 @@ omarchy-ma-player enable
 **Players → Play here** starts/selects the laptop without transferring or
 starting another player's queue. Start/Stop/Restart controls manage the helper.
 All MA requests use its authenticated remote session, without LAN fallback.
-Audio uses locally bundled transport/Sendspin code, not scripts from the MA
-server. Readiness confirms connectivity, not audible output.
+Audio uses native Sendspin over a Music Assistant Remote ID; it does not run
+scripts from the MA server. Readiness confirms connectivity, not audible output.
 
 For a reinstall, retain the private config and
-`~/.local/state/music-assistant-player/profile` to preserve player identity.
+`~/.local/state/music-assistant-player/identity.key` to preserve player identity.
 
 ## Features
 

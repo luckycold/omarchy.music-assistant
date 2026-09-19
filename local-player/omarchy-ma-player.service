@@ -1,16 +1,19 @@
 [Unit]
-Description=Music Assistant private local web player
+Description=Music Assistant native Remote-ID player
 After=network-online.target
 Wants=network-online.target omarchy-ma-mpris.service
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env node %h/.local/share/omarchy-ma-player/daemon.mjs
+WorkingDirectory=%h/.local/share/omarchy-ma-player
+ExecStart=%h/.local/share/omarchy-ma-player/venv/bin/python %h/.local/share/omarchy-ma-player/native_daemon.py
+Environment=PULSE_PROP_application.name=Music Assistant (Laptop)
+Environment=PULSE_PROP_media.role=music
 Restart=on-failure
 RestartSec=5
 KillMode=control-group
-TimeoutStopSec=10
+TimeoutStopSec=15
 UMask=0077
 StandardOutput=null
 StandardError=journal

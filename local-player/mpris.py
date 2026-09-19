@@ -292,7 +292,7 @@ def main():
             self.props = {}
             self.position_time = None
             self.root = typed({'CanQuit': False, 'CanRaise': False, 'HasTrackList': False,
-                               'Identity': 'Music Assistant (Laptop)', 'DesktopEntry': 'chromium',
+                               'Identity': 'Music Assistant (Laptop)', 'DesktopEntry': 'music-assistant-laptop',
                                'SupportedUriSchemes': [], 'SupportedMimeTypes': []})
 
         def publish(self, generation, ident, props):

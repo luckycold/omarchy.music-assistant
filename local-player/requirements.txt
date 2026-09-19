@@ -1,0 +1,2 @@
+aiortc==1.15.0
+sendspin @ git+https://github.com/Sendspin/sendspin-cli.git@511645a9c685544250037f801b63bbc86b6e9000
