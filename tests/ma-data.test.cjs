@@ -15,8 +15,16 @@ test('media and queue flatten nested MA fields', () => {
     name: 'Song', title: 'Song', artist: 'Artist A, Artist B', album: 'Album', image_url: 'https://cdn.example/cover.jpg', duration: 241, track_number: 0});
   const q = map('queueItem', {queue_item_id: 'queue-42', name: 'Artist A - Song', duration: 240, media_item: track()});
   assert.equal(q.uri, 'library://track/42');
+  assert.equal(q.name, 'Song');
   assert.equal(q.title, 'Song');
+  assert.equal(q.artist, 'Artist A, Artist B');
   assert.equal(q.duration, 240);
+});
+
+test('combined MASS display names do not duplicate the artist', () => {
+  const item = map('mediaItem', {name: 'The Gray Havens - Band of Gold', artists: [{name: 'The Gray Havens'}]});
+  assert.equal(item.title, 'Band of Gold');
+  assert.equal(item.artist, 'The Gray Havens');
 });
 
 test('image URLs reject file, javascript, and local schemes', () => {

@@ -71,9 +71,20 @@ function itemImage(value) {
   return "";
 }
 
+function splitTitle(name, artist) {
+  if (!name || !artist) return name;
+  var seps = [" - ", " — ", " – "];
+  for (var i = 0; i < seps.length; i++) {
+    var prefix = artist + seps[i];
+    if (name.indexOf(prefix) === 0 && name.length > prefix.length) return name.slice(prefix.length);
+  }
+  return name;
+}
+
 function mediaItem(value) {
   var item = object(value);
-  var name = text(item.name) || text(item.title);
+  var artist = artists(item.artists) || text(item.artist) || text(object(item.artist).name);
+  var name = splitTitle(text(item.name) || text(item.title), artist);
   return {
     uri: identifier(item.uri, 2048),
     item_id: identifier(item.item_id, 512),
@@ -81,7 +92,7 @@ function mediaItem(value) {
     media_type: identifier(item.media_type, 64),
     name: name,
     title: name,
-    artist: artists(item.artists) || text(item.artist) || text(object(item.artist).name),
+    artist: artist,
     album: text(object(item.album).name) || text(item.album),
     image_url: itemImage(item) || itemImage(object(item.album)),
     duration: number(item.duration, 31536000),
@@ -93,7 +104,7 @@ function queueItem(value) {
   var item = object(value);
   var result = mediaItem(item.media_item);
   result.queue_item_id = identifier(item.queue_item_id, 512);
-  result.name = text(item.name) || result.name;
+  result.name = result.name || splitTitle(text(item.name), result.artist);
   result.title = result.title || result.name;
   if (typeof item.duration === "number" && isFinite(item.duration) && item.duration >= 0)
     result.duration = number(item.duration, 31536000);
