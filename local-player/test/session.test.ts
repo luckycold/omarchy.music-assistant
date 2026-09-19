@@ -28,7 +28,7 @@ test('remote-only route authenticates before channel/SDK/pair/readiness and stri
   assert.equal(s.remoteOptions.skipCertificateVerification,false); assert.equal(s.remoteOptions.reconnect,false);
   assert.equal(s.remoteOptions.dataChannelLabel,'ma-api'); assert.equal(s.remoteOptions.remoteId,config.remoteId);
   assert.equal(s.sdkOptions.baseUrl,undefined); assert.equal(s.sdkOptions.productName,'Web Player');
-  assert.equal(s.sdkOptions.webSocket.readyState,1); assert.equal(s.spike.playerId,'public-player-id');
+  assert.equal(s.sdkOptions.webSocket.readyState,1); assert.equal(s.spike.status().playerId,'public-player-id');
   const status = s.spike.status(); assert.equal(status.phase,'ready'); assert.equal(status.paired,true);
   for (const secret of ['auth-secret','pair-secret','do-not-expose','hidden',config.remoteId]) assert.ok(!JSON.stringify(status).includes(secret));
   (status as any).phase='tampered'; assert.equal(s.spike.status().phase,'ready'); s.spike.disconnect(); assert.equal(s.spike.status().phase,'disconnected');

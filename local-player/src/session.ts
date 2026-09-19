@@ -148,5 +148,5 @@ export function createSession(config: SessionConfig, deps: Dependencies) {
       fail(a,'HEALTH_FAILED');throw failure;
     }
   }
-  return {connect,status,rpc,disconnect,health,get playerId(){return playerId;}};
+  return {connect,status,rpc,disconnect,health};
 }

@@ -1,7 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { base32nopad } from '@scure/base';
 import { SendspinCore, loadSendspinClientIdentity } from '@sendspin/sendspin-js';
 import { verifyAndSanitizeSdp } from '../src/vendor/frontend/crypto-utils.ts';

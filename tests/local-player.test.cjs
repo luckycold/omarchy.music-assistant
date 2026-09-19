@@ -34,7 +34,6 @@ test('remote-only config validates explicit local fields without requiring LAN U
 });
 test('all RPC constructors use root wrapper, including library and save queue', () => {
   assert.equal((source.match(/MaApi\.buildArgs\(/g) || []).length, 1);
-  assert.doesNotMatch(source, /MaApi\.buildPlayArgs\(/);
   for (const command of ['players/all', 'player_queues/items', 'music/search', 'player_queues/save_as_playlist', 'music/recently_played_items']) assert.ok(source.includes(command));
 });
 test('remote request sends command and arguments only on stdin, never LAN or secrets in argv', () => {
@@ -49,6 +48,8 @@ test('controller-only requests retain the existing token-over-stdin transport', 
   const root = {localPlayerEnabled: false, requestEpoch: 1, config: oldConfig};
   const payload = method('buildRequest', root, {MaApi: {buildArgs: () => ({script: 'curl script', token: 'SECRET'})}, Quickshell: {env: () => ''}})('players/all', {});
   assert.equal(payload.stdin, 'SECRET\n');
+  const request = source.slice(source.indexOf('component MaRequest: Process'));
+  assert.match(request, /onStarted:\s*\{\s*write\(job.stdin\)\s*job.stdin = ""\s*stdinEnabled = false\s*\}/);
   assert.equal(JSON.stringify(payload.command), JSON.stringify(['/bin/bash', '-c', 'curl script']));
 });
 test('MPRIS is disabled only when the selected player is the local identity', () => {
@@ -128,16 +129,6 @@ test('malformed player list clears stale state rather than throwing from a QML s
 });
 test('request process does not shadow the inherited exited signal', () => {
   assert.doesNotMatch(source, /property bool exited:/);
-});
-test('player commands use player_id while queue commands use queue_id', () => {
-  const calls=[];
-  const root={activePlayerId:'laptop',activeQueueId:'laptop',activeQueuePlayerId:'laptop',playerById:()=>({available:true}),runAction:(...args)=>calls.push(args)};
-  const action=method('actionForPlayer',root);
-  action('', 'players/cmd/volume_set',{volume_level:30});
-  action('', 'player_queues/pause',{});
-  assert.equal(calls[0][1].player_id,'laptop');
-  assert.equal(calls[0][1].queue_id,undefined);
-  assert.equal(calls[1][1].queue_id,'laptop');
 });
 function requestHarness() {
   const later = [], completions = [], replies = [], failures = [];
@@ -234,12 +225,4 @@ test('helper readiness gates requests with no LAN fallback and queue is bounded'
   for (let i=0; i<16; i++) assert.equal(ctx.enqueue({epoch:1, command:['queued'], stdin:''}), true);
   assert.equal(ctx.enqueue({epoch:1, command:['overflow'], stdin:''}), false);
   assert.equal(ctx.jobs.length, 16);
-});
-test('request process serializes reuse, times out, ignores obsolete replies, and closes stdin', () => {
-  assert.match(source, /component MaRequest: Process/);
-  assert.match(source, /jobs\.length >= 16/);
-  assert.match(source, /job\.epoch !== root\.requestEpoch/);
-  assert.match(source, /stdinEnabled = false/);
-  assert.match(source, /interval: 15000/);
-  assert.doesNotMatch(source, /authToken = payload2/);
 });

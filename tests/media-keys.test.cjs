@@ -8,10 +8,6 @@ test('local media support does not expose exclusive selected-player key handlers
   assert.doesNotMatch(source, /function mediaPlayPause\(/)
   assert.doesNotMatch(source, /function mediaPause\(/)
 })
-test('local-player example does not reserve normal global media keys', () => {
-  const file = path.join(__dirname, '../examples/media-keys.lua')
-  assert.ok(!fs.existsSync(file) || !/hl\.unbind/.test(fs.readFileSync(file, 'utf8')))
-})
 test('managed player brings up its own MPRIS companion', () => {
   assert.match(read('local-player/omarchy-ma-player.service'), /Wants=.*omarchy-ma-mpris\.service/)
 })

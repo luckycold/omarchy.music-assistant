@@ -30,12 +30,10 @@ Item {
   property int queueEpoch: 0
   property var queue: []
   property int queuePosition: -1
-  property int queueRevision: 0
   property var searchResults: null
   property string searchQuery: ""
   property string lastError: ""
   property bool connected: false
-  property int revision: 0
 
   // ------------------------------------------------------- local playback
   readonly property bool localPlayerEnabled: !!(root.config.localPlayer && root.config.localPlayer.enabled)
@@ -201,13 +199,10 @@ Item {
   }
   property string preferredPlayerId: ""
   property var favorites: ({ tracks: [], albums: [], artists: [], playlists: [], radio: [] })
-  property int favoritesRevision: 0
   property var _favTypes: []
   property int _favIndex: 0
   property var playlists: []
-  property int playlistsRevision: 0
   property var recentItems: []
-  property int recentRevision: 0
 
   readonly property int pollIntervalMs: {
     var v = config && config.pollIntervalMs ? config.pollIntervalMs : 2000
@@ -429,7 +424,6 @@ Item {
   property string repeatMode: "off"
   property int elapsed: 0
   property int duration: 0
-  property var _lastSuccessAt: 0
 
   Timer {
     id: pollTimer
@@ -456,13 +450,6 @@ Item {
     if (root.pollInFlight || playersProc.busy || activeQueueProc.busy || queueProc.busy) return
     root.pollInFlight = true
     root.runFetchPlayers()
-  }
-
-  function refreshIfStale(maxAgeMs) {
-    if (!root.ready) return
-    var age = Date.now() - (root._lastSuccessAt || 0)
-    if (age < maxAgeMs) return
-    root.refreshState()
   }
 
   // Every RPC, including library flows, must share the helper's authenticated
@@ -501,13 +488,11 @@ Item {
     root.shuffleEnabled = false
     root.repeatMode = "off"
     root.pollInFlight = false
-    root._lastSuccessAt = 0
     root.searchResults = null
     root.favorites = ({ tracks: [], albums: [], artists: [], playlists: [], radio: [] })
     root.playlists = []
     root.recentItems = []
     root._favTypes = []
-    root.saveQueuePhase = ""
   }
 
   // A Process cannot be restarted from its stdout callback. Queue immutable
@@ -728,9 +713,7 @@ Item {
       }
     })
     root.players = bounded
-    root.revision = root.revision + 1
     root.connected = true
-    root._lastSuccessAt = Date.now()
     root.lastError = ""
     return true
   }
@@ -745,7 +728,6 @@ Item {
       return MaData.queueItem(it)
     })
     root.queue = items
-    root.queueRevision = root.queueRevision + 1
   }
 
   function pickNextActivePlayer() {
@@ -753,11 +735,6 @@ Item {
     if (root.localPlayerEnabled && root.localPlayerId && root.preferredPlayerId === root.localPlayerId) return root.localPlayerId
     return MaApi.pickActivePlayerId(root.players, root.preferredPlayerId)
   }
-
-  function refreshPlayersOnly() {
-    root.refreshState()
-  }
-
 
   // ------------------------------------------------------------- helpers
 
@@ -779,23 +756,16 @@ Item {
 
   // ----------------------------------------------------------- action api
 
-  function runAction(command, args, onDone) {
+  function runAction(command, args) {
     if (!root.ready || !root.connected) return false
     var payload = root.buildRequest(command, args)
-    payload.context = { onDone: onDone || null }
     return root.runMaRequest(actionProc, payload)
   }
 
   MaRequest {
     id: actionProc
-    onCompleted: function(code, status, context) {
-      if (typeof root.actionOnExited === "function") root.actionOnExited(code, status)
-      if (typeof context.onDone === "function") context.onDone(code, status)
-      refreshTimer.restart()
-    }
+    onCompleted: refreshTimer.restart()
   }
-
-  property var actionOnExited: null
 
   Timer {
     id: refreshTimer
@@ -977,7 +947,6 @@ Item {
     handleReply: function(value, context) {
       if (context.query !== root.searchQuery) return
       root.searchResults = root._boundSearchResults(value)
-      root.searchRevision++
     }
   }
 
@@ -988,7 +957,6 @@ Item {
       var next = Object.assign({}, root.favorites)
       next[context.typeKey] = bounded
       root.favorites = next
-      root.favoritesRevision++
       root._favFetchNext()
     }
   }
@@ -997,38 +965,19 @@ Item {
     id: playlistsProc
     handleReply: function(value, context) {
       root.playlists = MaApi.boundedArray(value, MaApi.MAX_PLAYLISTS).map(root._boundMediaItem).filter(function(x) { return x !== null })
-      root.playlistsRevision++
     }
   }
 
   MaRequest {
     id: recentProc
     handleReply: function(value, context) {
-      root.recentItems = MaApi.boundedArray(value, MaApi.MAX_RECENT_ITEMS).filter(function(it) { return !!it }).map(function(it) {
-        var bounded = root._boundMediaItem(it)
-        bounded.last_played = MaApi.boundedString(it.last_played, 50)
-        bounded.timestamp = typeof it.timestamp === "number" ? it.timestamp : null
-        return bounded
-      })
-      root.recentRevision++
+      root.recentItems = MaApi.boundedArray(value, MaApi.MAX_RECENT_ITEMS).filter(function(it) { return !!it }).map(root._boundMediaItem)
     }
   }
 
   MaRequest {
     id: saveQueueProc
-    handleReply: function(value, context) {
-      // MA returns a BackgroundTask; scheduling is not completion.
-      root.saveQueuePhase = "scheduled"
-    }
-    onCompleted: function(code, status, context) {
-      if (code !== 0) root.saveQueuePhase = ""
-    }
   }
-
-  property string saveQueuePhase: ""
-
-
-  property int searchRevision: 0
 
   function seek(playerId, positionMs) {
     var pid = playerId || root.activePlayerId
@@ -1125,8 +1074,7 @@ Item {
     if (!name || !root.activeQueueId || root.activeQueuePlayerId !== root.activePlayerId || !root.queue || root.queue.length === 0 || saveQueueProc.busy) return
     var payload = root.buildRequest(
       "player_queues/save_as_playlist", { queue_id: root.activeQueueId, name: name }, "save-q")
-    root.saveQueuePhase = "scheduling"
-    if (!root.runMaRequest(saveQueueProc, payload)) root.saveQueuePhase = ""
+    root.runMaRequest(saveQueueProc, payload)
   }
 
   // ---------------------------------------------------------------- IPC

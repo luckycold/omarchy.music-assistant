@@ -10,32 +10,9 @@ Requires a current Omarchy shell exposing `qs.Ui.KeyboardPanel`. Older shells
 without that component cannot load the popup; check that
 `/usr/share/omarchy/shell/Ui/KeyboardPanel.qml` exists before installation.
 
-**Planning to use laptop playback?** Configure `localPlayer.enabled: true` and
-`installMediaKeys: false` before the first valid configuration is loaded. This
-avoids the controller-only key installer; local playback uses normal desktop
-MPRIS routing. For an existing installation, remove any old override as described
-under [Media keys](#media-keys)—enabling local mode does not erase earlier bindings.
-
 ```sh
 omarchy plugin add https://github.com/manologarciadev/omarchy.music-assistant.git --enable
 ```
-
-**Testing this PR before merge:** the default branch does not contain the optional
-local-player work. Use the following **instead** of the command above. `--yes`
-accepts the trusted-repository prompt and leaves the clone disabled while its
-branch is selected:
-
-```sh
-omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --yes
-plugin_dir="$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant"
-git -C "$plugin_dir" switch --track origin/feature/remote-local-playback
-omarchy plugin validate "$plugin_dir"
-```
-
-Then configure the plugin below and enable it with
-`omarchy plugin enable io.github.manologarciadev.music-assistant`.
-For laptop playback, also install the separate helper as described below;
-cloning/enabling the QML plugin alone does not install the audio runtime.
 
 1. In Music Assistant go to **Settings → Profile** and create a long-lived
    access token.
@@ -62,20 +39,22 @@ cloning/enabling the QML plugin alone does not install the audio runtime.
 
 ## Optional local laptop playback
 
-**Development/testing:** this feature is on `feature/remote-local-playback`.
-The implementation is installed and ready for user acceptance testing after
-live playback and stability checks. See [verification status](docs/verification.md).
+Requires Node 22+, npm, Chromium, Python with `dbus-python` and PyGObject
+(`python-dbus` / `python-gobject` on Arch), a systemd user session, and working
+PipeWire/PulseAudio. Run as the desktop user, not root:
 
-Install the separate helper using [local-player/README.md](local-player/README.md)
-on the desktop user account. The plugin expects
-`~/.local/bin/omarchy-ma-player` and the user unit `omarchy-ma-player.service`;
-it does not install them itself. Keep `localPlayer.enabled: false` for the
-existing controller-only mode.
+```sh
+cd "$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/local-player"
+./install.sh
+```
 
-Merge these settings into your existing runtime config, retaining `token`:
+The installer builds/tests the helper, installs it outside the plugin directory,
+and registers its user services. It does not edit configuration or start playback.
+Add these settings to your private config, retaining `token`:
 
 ```json
 {
+  "installMediaKeys": false,
   "localPlayer": {
     "enabled": true,
     "remoteId": "<exact-26-character-remote-ID>",
@@ -86,55 +65,27 @@ Merge these settings into your existing runtime config, retaining `token`:
 }
 ```
 
-Replace the Remote ID placeholder with the exact canonical ID; whitespace and
-case are not normalized. `name` must be nonempty and at most 80 characters.
-`forceRelay` requests relay-only connectivity. `url` is not required for RPCs in
-this mode; configure `openWebUiPath` separately if you want the web UI shortcut.
-The config stays at `$XDG_CONFIG_HOME/music-assistant/config.json` (default
-`~/.config/music-assistant/config.json`), outside Omarchy's watched plugin tree.
-File changes reload the plugin config; **restart the helper after changing its
-connection settings**. Protect the config with mode 0600.
+Set `installMediaKeys: false` before the first valid config load to avoid the
+controller-only bindings. Existing overrides must be removed under
+[Media keys](#media-keys). Remote IDs are case-sensitive; `url` is not required
+in this mode. With a custom `XDG_CONFIG_HOME`, use the same value in the shell
+and systemd user session. Restart the helper after connection settings change.
 
-In **Players**, Start/Stop/Restart invoke `systemctl --user` for the helper unit.
-**Play here** starts it if needed, waits for readiness and selects the laptop's
-own queue. It does not transfer, replace or start another player's playback.
-The ordinary player-row transfer action remains separate. The panel shows the
-helper phase and safe errors, and disables playback actions while disconnected.
+```sh
+omarchy-ma-player start
+omarchy-ma-player status   # wait for ready: true
+# Optional: start automatically on login
+omarchy-ma-player enable
+```
 
-When enabled, **every MA RPC**, including library/search/save-queue calls, uses
-the helper's authenticated remote session; helper failures never fall back to
-the configured LAN URL. The CLI contract is:
+**Players → Play here** starts/selects the laptop without transferring or
+starting another player's queue. Start/Stop/Restart controls manage the helper.
+All MA requests use its authenticated remote session, without LAN fallback.
+Audio uses locally bundled transport/Sendspin code, not scripts from the MA
+server. Readiness confirms connectivity, not audible output.
 
-- `omarchy-ma-player status`: JSON `{phase, ready, playerId, playing, error}`.
-- `omarchy-ma-player request`: one stdin JSON line `{command, args}`; stdout
-  `{result: ...}`, or a nonzero exit and `{error: "SAFE_CODE"}`.
-
-Requests are serialized per process with bounded queues, timeouts and session
-epoch invalidation. Controller-only mode retains token-over-stdin HTTP requests.
-Local-player mode never installs or rewrites media-key bindings. When this
-laptop is selected, plugin transport actions do not fall back to another MPRIS
-application, including while the helper is disconnected.
-
-### Local-player IPC
-
-Use the same `io.github.manologarciadev.music-assistant` IPC target:
-
-| Method | Description |
-|--------|-------------|
-| `localPlayerStatus()` | JSON phase/readiness/identity/playback/error plus enabled/busy/pending flags |
-| `startLocalPlayer()` / `stopLocalPlayer()` / `restartLocalPlayer()` | Helper user-service lifecycle |
-| `playHere()` | Start if needed and select local queue only |
-| `enableLocalPlayer()` / `disableLocalPlayer()` | Enable/disable service autostart, not current playback |
-
-`ok` acknowledges an accepted asynchronous action, not successful startup;
-inspect `localPlayerStatus()` for readiness or failure.
-
-### Verification boundary
-
-Run `node --test tests/*.test.cjs` for config and extracted QML JavaScript tests.
-These tests do not instantiate Quickshell or demonstrate live audio. Validate
-QML loading, helper readiness, actual PipeWire playback, relay-only operation,
-and reconnect/suspend behavior on the intended desktop before claiming those work.
+For a reinstall, retain the private config and
+`~/.local/state/music-assistant-player/profile` to preserve player identity.
 
 ## Features
 
@@ -201,6 +152,17 @@ other shell components (or external scripts) can call it:
 | `activatePlayerById(playerId)` | Switch active player without transferring queue |
 | `transferQueueTo(targetId)` | Transfer the queue from the active player to another |
 | `playersList()` | JSON list of every player with playback state |
+
+### Local playback
+
+| Method | Description |
+|--------|-------------|
+| `localPlayerStatus()` | Helper phase, readiness and safe error status |
+| `startLocalPlayer()` / `stopLocalPlayer()` / `restartLocalPlayer()` | Helper lifecycle |
+| `playHere()` | Start if needed and select the laptop |
+| `enableLocalPlayer()` / `disableLocalPlayer()` | Enable/disable autostart, not current playback |
+
+Lifecycle calls acknowledge an asynchronous action; check status for readiness.
 
 ### Queue & search
 

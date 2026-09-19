@@ -57,6 +57,24 @@ test('late remote description does not mutate a replacement connection', async (
   finally { t.disconnect(); globalThis.RTCSessionDescription = saved; }
 });
 
+test('server-info stays on the API channel without opening unused http_proxy', async () => {
+  const t = make(), opened: string[] = [], delivered: string[] = [];
+  t.peerConnection = {
+    connectionState: 'connected',
+    createDataChannel(label: string) { opened.push(label); return { readyState: 'open', close() {} }; },
+    close() {},
+  };
+  t.createDataChannel();
+  t.on('message', (data: string) => delivered.push(data));
+  const info = JSON.stringify({ server_id: 'test', schema_version: 49 });
+  try {
+    t.dataChannel.onmessage({ data: info });
+    await Promise.resolve();
+    assert.deepEqual(delivered, [info]);
+    assert.deepEqual(opened, ['ma-api']);
+  } finally { t.disconnect(); }
+});
+
 test('chunk group flood is bounded and disconnect releases buffers/timer', () => {
   const t = make();
   try {

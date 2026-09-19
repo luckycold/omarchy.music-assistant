@@ -19,7 +19,7 @@ function reply(id, root) {
 function harness() {
   const calls = [];
   const root = {ready:true, connected:true, activePlayerId:'speaker', activeQueueId:'group', activeQueuePlayerId:'speaker', queueEpoch:0,
-    queue:[{uri:'library://track/1'}], queuePosition:7, queueRevision:0, shuffleEnabled:true, repeatMode:'all',
+    queue:[{uri:'library://track/1'}], queuePosition:7, shuffleEnabled:true, repeatMode:'all',
     playerById:()=>({available:true}), config:{}, persistConfig(){}, refreshState(){}, refreshFavorites(){},
     runAction:(command,args)=>{calls.push({command,args}); return true;},
     buildRequest:(command,args)=>({command,args}), runMaRequest:(proc,payload)=>{calls.push(payload); return true;}};
@@ -100,11 +100,32 @@ test('remove favorite accepts only library singular media URIs',()=>{
   assert.equal(calls.length,1); assert.equal(root.lastError,'FAVORITE_REQUIRES_LIBRARY_ITEM');
   method('addFavorite',root)('spotify://track/42'); assert.equal(calls[1].args.item,'spotify://track/42');
 });
-test('save queue uses server queue snapshot and reports scheduled task',()=>{
-  const {root,calls}=harness(); method('saveQueueAsPlaylist',root,{saveQueueProc:{busy:false}})('Road');
+test('save queue uses server snapshot without treating scheduling as completion',()=>{
+  const {root,calls}=harness(), saveQueueProc={busy:false};
+  root.showOsd=()=>assert.fail('not saved yet'); root.refreshPlaylists=()=>assert.fail('task not complete');
+  const save=method('saveQueueAsPlaylist',root,{saveQueueProc});
+  save('Road');
   assert.equal(calls[0].command,'player_queues/save_as_playlist');
   assert.equal(JSON.stringify(calls[0].args),JSON.stringify({queue_id:'group',name:'Road'}));
-  root.showOsd=()=>assert.fail('not saved yet'); root.refreshPlaylists=()=>assert.fail('task not complete');
-  reply('saveQueueProc',root)({task_id:'task-1',status:'pending'},calls[0].context);
-  assert.equal(root.saveQueuePhase,'scheduled'); assert.equal(calls.length,1);
+  const proc=source.match(/MaRequest\s*\{\s*id: saveQueueProc\b([\s\S]*?)\n  \}/);
+  assert.ok(proc); assert.doesNotMatch(proc[1], /showOsd|refreshPlaylists/);
+  saveQueueProc.busy=true; save('Busy');
+  saveQueueProc.busy=false; save('');
+  root.activeQueuePlayerId='other'; save('Wrong player');
+  root.activeQueuePlayerId='speaker'; root.activeQueueId=''; save('Unresolved');
+  root.activeQueueId='group'; root.queue=[]; save('Empty');
+  assert.equal(calls.length,1);
+});
+test('actions retain connection gating and refresh on completion',()=>{
+  const {root,calls}=harness(), actionProc={};
+  const run=method('runAction',root,{actionProc});
+  root.connected=false; assert.equal(run('player_queues/pause',{}),false);
+  root.connected=true; root.ready=false; assert.equal(run('player_queues/pause',{}),false);
+  assert.equal(calls.length,0);
+  root.ready=true; assert.equal(run('player_queues/pause',{queue_id:'group'}),true);
+  assert.equal(JSON.stringify(calls[0]),JSON.stringify({command:'player_queues/pause',args:{queue_id:'group'}}));
+  const handler=source.match(/id: actionProc\s+onCompleted: ([^\n]+)/);
+  assert.ok(handler); let refreshes=0;
+  vm.runInNewContext(handler[1],{refreshTimer:{restart(){refreshes++;}}});
+  assert.equal(refreshes,1);
 });

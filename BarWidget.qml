@@ -26,7 +26,6 @@ BarWidget {
   readonly property int volume: service ? service.activeVolume : 100
   readonly property int duration: service ? service.activeDuration : 0
   readonly property int elapsed: service ? service.activeElapsed : 0
-  readonly property int revision: service ? service.revision : 0
 
   // Active popup section: "now", "players", "search", "favorites", "playlists", "recent"
   property string popupSection: "now"
@@ -112,6 +111,7 @@ BarWidget {
 
         NumberAnimation on x {
           id: scrollAnim
+          onRunningChanged: if (!running) labelText.x = 0
           running: labelText.needsScroll && !root.popupOpen && !root.bar.vertical
           loops: Animation.Infinite
           duration: Math.max(6000, labelText.implicitWidth * 25)

@@ -12,7 +12,7 @@ export class ChannelSocket {
   onclose: ((event: CloseEvent) => void) | null = null;
   private channel?: RTCDataChannel;
   private closed = false;
-  private counts = {rxText:0, txText:0, rxBinary:0, txBinary:0, rxBytes:0, txBytes:0};
+  private counts = {rxBinary:0, rxBytes:0};
   constructor(private fault: (code: ErrorCode) => void = () => {}) {}
   get readyState(): number {
     if (this.closed) return this.CLOSED;
@@ -39,9 +39,8 @@ export class ChannelSocket {
   }
   private message = (event: MessageEvent) => {
     if (this.closed) return;
-    if (typeof event.data === 'string') this.counts.rxText++;
-    else if (event.data instanceof ArrayBuffer) { this.counts.rxBinary++; this.counts.rxBytes += event.data.byteLength; }
-    else { this.fault('CHANNEL_ERROR'); return; }
+    if (event.data instanceof ArrayBuffer) { this.counts.rxBinary++; this.counts.rxBytes += event.data.byteLength; }
+    else if (typeof event.data !== 'string') { this.fault('CHANNEL_ERROR'); return; }
     this.invoke(() => this.onmessage?.(event));
   };
   private error = () => { this.fault('CHANNEL_ERROR'); this.invoke(() => this.onerror?.(new Event('error'))); };
@@ -59,8 +58,8 @@ export class ChannelSocket {
   send(data: string | ArrayBuffer | ArrayBufferView) {
     if (this.readyState !== this.OPEN || !this.channel) throw new PlayerError('CHANNEL_CLOSED');
     try {
-      if (typeof data === 'string') { this.channel.send(data); this.counts.txText++; }
-      else { this.channel.send(data as ArrayBuffer); this.counts.txBinary++; this.counts.txBytes += data.byteLength; }
+      if (typeof data === 'string') this.channel.send(data);
+      else this.channel.send(data as ArrayBuffer);
     } catch { this.fault('CHANNEL_ERROR'); throw new PlayerError('CHANNEL_ERROR'); }
   }
   close(_code?: number, _reason?: string) {

@@ -89,18 +89,6 @@ function buildArgs(url, token, command, args, messageId) {
   }
 }
 
-function buildPlayArgs(url, token, command, args, messageId) {
-  var body = {
-    message_id: messageId !== undefined ? messageId : "omarchy-play-" + (counter++),
-    command: command,
-    args: args || {}
-  }
-  return {
-    script: _buildCurlScript(url, JSON.stringify(body), "8", false),
-    token: token
-  }
-}
-
 function isPlaying(player) {
   if (!player) return false
   return player.playback_state === "playing"
@@ -210,13 +198,6 @@ function providerDomain(item) {
   return item.provider || ""
 }
 
-function providerInstanceName(item) {
-  if (!item) return ""
-  if (item.provider_mappings && item.provider_mappings.length > 0 && item.provider_mappings[0].provider_instance)
-    return item.provider_mappings[0].provider_instance
-  return ""
-}
-
 function mediaTypeLabel(t) {
   if (!t) return ""
   var map = {
@@ -227,52 +208,4 @@ function mediaTypeLabel(t) {
     radio: "Radio"
   }
   return map[t] || t
-}
-
-function repeatModeIcon(mode) {
-  if (mode === "one") return ""
-  if (mode === "all") return ""
-  return ""
-}
-
-function repeatModeLabel(mode) {
-  if (mode === "one") return "Repeat one"
-  if (mode === "all") return "Repeat all"
-  return "Repeat off"
-}
-
-function shuffleIcon(enabled) {
-  return enabled ? "" : ""
-}
-
-function formatRelativeTime(epochSeconds) {
-  if (!epochSeconds || epochSeconds <= 0) return ""
-  var now = Math.floor(Date.now() / 1000)
-  var delta = now - epochSeconds
-  if (delta < 60) return delta + "s ago"
-  if (delta < 3600) return Math.floor(delta / 60) + " min ago"
-  if (delta < 86400) return Math.floor(delta / 3600) + " h ago"
-  if (delta < 604800) return Math.floor(delta / 86400) + " d ago"
-  return new Date(epochSeconds * 1000).toLocaleDateString()
-}
-
-function parseEvent(message) {
-  try {
-    var obj = JSON.parse(String(message || "{}"))
-    return {
-      event: obj.event || "",
-      objectId: obj.object_id || obj.data || null,
-      data: obj.data || null
-    }
-  } catch (e) {
-    return { event: "", objectId: null, data: null }
-  }
-}
-
-function providerInstanceLabel(item) {
-  if (!item) return ""
-  if (item.provider_mappings && item.provider_mappings.length > 0 && item.provider_mappings[0].provider_instance) {
-    return item.provider_mappings[0].provider_instance
-  }
-  return ""
 }

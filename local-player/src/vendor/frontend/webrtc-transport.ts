@@ -55,21 +55,11 @@ const MAX_CHUNK_COUNT = 1024;
 const MAX_CHUNK_GROUPS = 32;
 const CHUNK_TTL_MS = 30000;
 
-// Proxied HTTP requests (album art, previews) get their own channel so their large
-// payloads don't hold up API messages. Older servers take a label they don't know for
-// the API channel itself, so the channel is only opened once the server reports it
-// knows this one.
-const HTTP_PROXY_CHANNEL_LABEL = "http_proxy";
-const HTTP_PROXY_CHANNEL_SCHEMA_VERSION = 49;
-
 export class WebRTCTransport extends BaseTransport {
   private options: Required<WebRTCTransportOptions>;
   private signaling: SignalingClient;
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
-  private httpProxyChannel: RTCDataChannel | null = null;
-  // The proxy channel is negotiated at most once per connection.
-  private httpProxyChannelRequested = false;
   private iceCandidateBuffer: RTCIceCandidateInit[] = [];
   private remoteDescriptionSet = false;
   private reconnectAttempts = 0;
@@ -81,19 +71,6 @@ export class WebRTCTransport extends BaseTransport {
   private connectionGeneration = 0;
   private cancelConnectionWait: (() => void) | null = null;
   private chunkExpiryTimer: ReturnType<typeof setInterval> | null = null;
-  private httpProxyCallbacks = new Map<
-    string,
-    {
-      resolve: (value: {
-        status: number;
-        headers: Record<string, string>;
-        body: Uint8Array;
-      }) => void;
-      reject: (error: Error) => void;
-      // requests sent on the proxy channel die with it, unlike those on the API channel
-      onProxyChannel: boolean;
-    }
-  >();
   // Reassembly buffers for oversized messages the server splits into chunks, keyed by group id.
   // Group ids are unique across channels, so the dispatch of the channel a group started on
   // is kept with it.
@@ -108,18 +85,6 @@ export class WebRTCTransport extends BaseTransport {
       dispatch: (data: string) => void;
     }
   >();
-  // Stable identity, so a closing proxy channel can find the groups it started.
-  private readonly dispatchHttpProxy = (data: string): void =>
-    this.handleHttpProxyMessage(data);
-  // Response being reassembled on the proxy channel: its header, then raw body frames.
-  private pendingProxyBody: {
-    id: string;
-    status: number;
-    headers: Record<string, string>;
-    size: number;
-    parts: Uint8Array[];
-    received: number;
-  } | null = null;
   // ICE servers received from the signaling server (provided by MA server)
   private iceServers: IceServerConfig[] = [];
 
@@ -355,139 +320,7 @@ export class WebRTCTransport extends BaseTransport {
   }
 
   private dispatchMessage(data: string): void {
-    // HTTP-proxy responses are consumed here; anything else is a normal API message.
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed.type === "http-proxy-response") {
-        this.handleHttpProxyResponse(parsed);
-        return;
-      }
-      // server_info is the first message on this channel and carries the schema version.
-      if (typeof parsed.schema_version === "number") {
-        this.maybeOpenHttpProxyChannel(parsed.schema_version);
-      }
-    } catch {
-      // not JSON or not an HTTP proxy response
-    }
     this.emit("message", data);
-  }
-
-  /**
-   * Handle a message from the http_proxy channel, which carries each proxy response as a
-   * JSON header followed by its body as raw binary frames.
-   */
-  private handleHttpProxyMessage(data: string | ArrayBuffer): void {
-    if (typeof data !== "string") {
-      const pending = this.pendingProxyBody;
-      if (!pending) return;
-      pending.parts.push(new Uint8Array(data));
-      pending.received += data.byteLength;
-      if (pending.received >= pending.size) this.completeHttpProxyBody();
-      return;
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(data);
-    } catch {
-      return; // not JSON; nothing on this channel to dispatch
-    }
-    // a hex response big enough to be split arrives as chunk frames to reassemble first
-    if (parsed.type === "__chunk__") {
-      this.handleChunk(parsed, this.dispatchHttpProxy);
-      return;
-    }
-    if (parsed.type !== "http-proxy-response") return;
-    // a response without a body length is the hex-in-JSON form, which a server that
-    // predates the binary framing still answers with
-    if (typeof parsed.size !== "number") {
-      this.handleHttpProxyResponse(parsed);
-      return;
-    }
-    // no point buffering frames for a request that already gave up
-    if (!this.httpProxyCallbacks.has(parsed.id)) return;
-    this.pendingProxyBody = {
-      id: parsed.id,
-      status: parsed.status,
-      headers: parsed.headers,
-      size: parsed.size,
-      parts: [],
-      received: 0,
-    };
-    // an empty body is sent as a header on its own
-    if (parsed.size === 0) this.completeHttpProxyBody();
-  }
-
-  private completeHttpProxyBody(): void {
-    const pending = this.pendingProxyBody;
-    if (!pending) return;
-    this.pendingProxyBody = null;
-    // check for a waiting caller before assembling, which for an image copies real bytes
-    const callbacks = this.httpProxyCallbacks.get(pending.id);
-    if (!callbacks) return;
-    this.httpProxyCallbacks.delete(pending.id);
-    const body = new Uint8Array(pending.received);
-    let offset = 0;
-    for (const part of pending.parts) {
-      body.set(part, offset);
-      offset += part.byteLength;
-    }
-    callbacks.resolve({
-      status: pending.status,
-      headers: pending.headers,
-      body: body.subarray(0, pending.size),
-    });
-  }
-
-  private maybeOpenHttpProxyChannel(schemaVersion: number): void {
-    if (
-      this.httpProxyChannelRequested ||
-      schemaVersion < HTTP_PROXY_CHANNEL_SCHEMA_VERSION
-    ) {
-      return;
-    }
-    this.httpProxyChannelRequested = true;
-    void this.openHttpProxyChannel();
-  }
-
-  private async openHttpProxyChannel(): Promise<void> {
-    try {
-      const channel = await this.openDataChannel(HTTP_PROXY_CHANNEL_LABEL);
-      if (!channel) return;
-      if (!this.httpProxyChannelRequested) {
-        // the connection this channel was opened for is already torn down
-        channel.close();
-        return;
-      }
-      // body frames arrive as raw binary, which must not be surfaced as Blobs
-      channel.binaryType = "arraybuffer";
-      channel.onmessage = (event) => this.handleHttpProxyMessage(event.data);
-      channel.onclose = () => {
-        // a response cut off mid-transfer can never be completed, so drop what it left
-        this.pendingProxyBody = null;
-        for (const [id, group] of this.chunkGroups) {
-          if (group.dispatch === this.dispatchHttpProxy) {
-            this.dropChunkGroup(id);
-          }
-        }
-        if (this.httpProxyChannel === channel) {
-          this.httpProxyChannel = null;
-        }
-        // nothing still in flight here can be answered now, so fail those callers at once
-        // rather than leaving each one waiting out its timeout
-        for (const [id, callbacks] of this.httpProxyCallbacks) {
-          if (!callbacks.onProxyChannel) continue;
-          this.httpProxyCallbacks.delete(id);
-          callbacks.reject(new Error("http_proxy channel closed"));
-        }
-      };
-      this.httpProxyChannel = channel;
-    } catch (error) {
-      // proxying over the API channel remains a working fallback
-      console.warn(
-        "[WebRTCTransport] http_proxy DataChannel unavailable:",
-        error,
-      );
-    }
   }
 
   private handleChunk(
@@ -700,119 +533,6 @@ export class WebRTCTransport extends BaseTransport {
     });
   }
 
-  /**
-   * Send HTTP proxy request over WebRTC data channel
-   *
-   * :param method: HTTP method (GET, POST, etc.)
-   * :param path: Request path including query string
-   * :param headers: Request headers
-   */
-  async sendHttpProxyRequest(
-    method: string,
-    path: string,
-    headers: Record<string, string> = {},
-  ): Promise<{
-    status: number;
-    headers: Record<string, string>;
-    body: Uint8Array;
-  }> {
-    // Falls back to the API channel when the server has no dedicated proxy channel.
-    const channel =
-      this.httpProxyChannel?.readyState === "open"
-        ? this.httpProxyChannel
-        : this.dataChannel;
-    if (!channel || channel.readyState !== "open") {
-      throw new Error("DataChannel is not open");
-    }
-
-    // Generate unique request ID
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-
-    // Create promise for response
-    const responsePromise = new Promise<{
-      status: number;
-      headers: Record<string, string>;
-      body: Uint8Array;
-    }>((resolve, reject) => {
-      // Store callbacks
-      this.httpProxyCallbacks.set(requestId, {
-        resolve,
-        reject,
-        onProxyChannel: channel === this.httpProxyChannel,
-      });
-
-      // Set timeout
-      setTimeout(() => {
-        if (this.httpProxyCallbacks.has(requestId)) {
-          this.httpProxyCallbacks.delete(requestId);
-          // stop buffering frames nothing is waiting for any more
-          if (this.pendingProxyBody?.id === requestId) {
-            this.pendingProxyBody = null;
-          }
-          reject(new Error("HTTP proxy request timeout"));
-        }
-      }, 30000);
-    });
-
-    // Send request
-    const request = {
-      type: "http-proxy-request",
-      id: requestId,
-      method,
-      path,
-      headers,
-    };
-
-    channel.send(JSON.stringify(request));
-
-    return responsePromise;
-  }
-
-  /**
-   * Handle HTTP proxy response from server
-   */
-  private handleHttpProxyResponse(data: {
-    id: string;
-    status: number;
-    headers: Record<string, string>;
-    body: string;
-  }): void {
-    const { id, status, headers, body } = data;
-
-    const callbacks = this.httpProxyCallbacks.get(id);
-    if (callbacks) {
-      this.httpProxyCallbacks.delete(id);
-
-      try {
-        // Convert hex string to Uint8Array
-        const bodyBytes = this.hexToBytes(body);
-
-        callbacks.resolve({
-          status,
-          headers,
-          body: bodyBytes,
-        });
-      } catch (error) {
-        callbacks.reject(
-          error instanceof Error
-            ? error
-            : new Error("Failed to parse response"),
-        );
-      }
-    }
-  }
-
-  /**
-   * Convert hex string to Uint8Array
-   */
-  private hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) {
-      bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
-    }
-    return bytes;
-  }
-
   private scheduleReconnect(): void {
     // Connection is down; cancel any pending backoff reset before we bail or retry.
     this.clearStableConnectionTimer();
@@ -903,16 +623,6 @@ export class WebRTCTransport extends BaseTransport {
       this.dataChannel = null;
     }
 
-    if (this.httpProxyChannel) {
-      this.httpProxyChannel.onopen = null;
-      this.httpProxyChannel.onclose = null;
-      this.httpProxyChannel.onerror = null;
-      this.httpProxyChannel.onmessage = null;
-      this.httpProxyChannel.close();
-      this.httpProxyChannel = null;
-    }
-    this.httpProxyChannelRequested = false;
-
     if (this.peerConnection) {
       // Detach first so close doesn't re-enter handleConnectionFailure().
       this.peerConnection.onicecandidate = null;
@@ -926,15 +636,9 @@ export class WebRTCTransport extends BaseTransport {
     this.remoteDescriptionSet = false;
     this.iceCandidateBuffer = [];
 
-    // Clear pending HTTP proxy requests
-    for (const [, callbacks] of this.httpProxyCallbacks.entries()) {
-      callbacks.reject(new Error("Transport closed"));
-    }
-    this.httpProxyCallbacks.clear();
     this.chunkGroups.clear();
     if (this.chunkExpiryTimer !== null) clearInterval(this.chunkExpiryTimer);
     this.chunkExpiryTimer = null;
-    this.pendingProxyBody = null;
   }
 
   /**

@@ -1,4 +1,4 @@
-import {readFile,writeFile,unlink,open,constants} from 'node:fs/promises';
+import {readFile,unlink,open,constants} from 'node:fs/promises';
 import {spawn,type ChildProcess} from 'node:child_process';
 import {homedir} from 'node:os';import {join,dirname} from 'node:path';import {fileURLToPath} from 'node:url';
 import {loadConfig,configPath,privateDirectory,bootstrap,chromiumArgs} from './config';import {createBridge} from './bridge';
