@@ -6,6 +6,16 @@ control.
 
 ## Setup
 
+Requires a current Omarchy shell exposing `qs.Ui.KeyboardPanel`. Older shells
+without that component cannot load the popup; check that
+`/usr/share/omarchy/shell/Ui/KeyboardPanel.qml` exists before installation.
+
+**Planning to use laptop playback?** Configure `localPlayer.enabled: true` and
+`installMediaKeys: false` before the first valid configuration is loaded. This
+avoids the controller-only key installer; local playback uses normal desktop
+MPRIS routing. For an existing installation, remove any old override as described
+under [Media keys](#media-keys)—enabling local mode does not erase earlier bindings.
+
 ```sh
 omarchy plugin add https://github.com/manologarciadev/omarchy.music-assistant.git --enable
 ```
@@ -37,7 +47,8 @@ cloning/enabling the QML plugin alone does not install the audio runtime.
      "url": "http://192.168.1.1:8095",
      "token": "eyJhbGciOi...",
      "pollIntervalMs": 2000,
-     "preferredPlayerId": ""
+     "preferredPlayerId": "",
+     "installMediaKeys": false
    }
    ```
    After saving, restrict permissions since the token grants admin access:

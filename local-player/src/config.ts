@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {base32nopad} from '@scure/base';
 export interface PlayerConfig {token:string;remoteId:string;signalingUrl:string;name:string;forceRelay:boolean}
+export function configPath(home:string,configHome?:string){return join(configHome||join(home,'.config'),'music-assistant/config.json');}
 export async function privateDirectory(path:string){
  await mkdir(path,{recursive:true,mode:0o700});const s=await lstat(path);
  if(!s.isDirectory()||s.isSymbolicLink()||s.uid!==process.getuid?.())throw Error('CONFIG_PRIVATE');await chmod(path,0o700);

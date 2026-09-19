@@ -5,7 +5,7 @@
   "version": "1.1.0",
   "author": "manologarciadev",
   "license": "MIT",
-  "description": "Control Music Assistant via its JSON-RPC API. Auto-installs Hyprland media key bindings and routes them through MPRIS when other players (YouTube, Spotify) are active.",
+  "description": "Control Music Assistant via its JSON-RPC API, with optional managed remote laptop playback and local-only MPRIS integration.",
   "kinds": [
     "service",
     "bar-widget"

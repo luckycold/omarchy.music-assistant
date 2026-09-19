@@ -16,12 +16,15 @@ and the `omarchy-ma-player.service` / `omarchy-ma-mpris.service` user units,
 and reloads systemd. The player starts its MPRIS companion as a dependency.
 It does **not** start/enable playback or edit existing config.
 
-Merge into existing `~/.config/music-assistant/config.json` (retain url/token):
+Merge into `$XDG_CONFIG_HOME/music-assistant/config.json` (default
+`~/.config/music-assistant/config.json`; retain url/token). If using a custom
+`XDG_CONFIG_HOME`, supply the same value to the desktop and systemd user service.
 
 ```json
 {
   "url": "https://your-existing-server",
   "token": "<existing-access-token>",
+  "installMediaKeys": false,
   "localPlayer": {
     "enabled": true,
     "remoteId": "<exact-26-character-remote-ID>",
@@ -37,6 +40,22 @@ Config must be owner-owned regular file with no group/other permissions
 not normalized. WSS is required; credentials/query/fragment in signaling URL are
 rejected. Name defaults to Laptop; forceRelay defaults false. No configuration
 or access token is exposed through status, argv or logs. Restart after changes.
+
+After saving the private configuration:
+
+```sh
+omarchy-ma-player start
+omarchy-ma-player status
+# Optional: start automatically on future logins.
+omarchy-ma-player enable
+```
+
+Wait for `ready: true`; an accepted systemd start is not proof of connectivity.
+Then use **Play here** to select the laptop without replacing another queue.
+For a reinstall, stop both user units before backing up/removing their installed
+files. Keep the private configuration and `~/.local/state/music-assistant-player/profile`
+if you want to retain the same server/player identity. A code reinstall does not
+require deleting that identity or exposing credentials in the plugin checkout.
 
 ## CLI contract
 

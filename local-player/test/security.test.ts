@@ -15,6 +15,13 @@ test('private config, defaults, strict identity and relay validation',async()=>{
  await privateDirectory(join(dir,'state'));assert.equal((await stat(join(dir,'state'))).mode&0o777,0o700);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+test('config path follows the same XDG setting as the QML plugin',async()=>{
+ const config=await import('../src/config.ts');
+ assert.equal(typeof config.configPath,'function');
+ assert.equal(config.configPath('/home/test'),'/home/test/.config/music-assistant/config.json');
+ assert.equal(config.configPath('/home/test',''),'/home/test/.config/music-assistant/config.json');
+ assert.equal(config.configPath('/home/test','/custom/config'),'/custom/config/music-assistant/config.json');
+});
 test('protocol reserves authentication and rejects malformed commands',()=>{
  for(const command of ['auth','auth/login','sendspin/pair_web_player','../auth','', ' auth']) assert.throws(()=>validateRequest({command,args:{}}));
  assert.deepEqual(validateRequest({command:'players/get',args:{player_id:'abc'}}),{command:'players/get',args:{player_id:'abc'}});
