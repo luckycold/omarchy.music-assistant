@@ -35,8 +35,8 @@ omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --en
 ## Optional local laptop playback
 
 **Development/testing:** this feature is on `feature/remote-local-playback`.
-The implementation is installed on the test laptop, but an intermittent health
-reconnect is still being investigated. See [verification status](docs/verification.md).
+The implementation is installed and ready for user acceptance testing after
+live playback and stability checks. See [verification status](docs/verification.md).
 
 Install the separate helper using [local-player/README.md](local-player/README.md)
 on the desktop user account. The plugin expects
