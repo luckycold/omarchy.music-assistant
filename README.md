@@ -7,8 +7,25 @@ control.
 ## Setup
 
 ```sh
-omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --enable
+omarchy plugin add https://github.com/manologarciadev/omarchy.music-assistant.git --enable
 ```
+
+**Testing this PR before merge:** the default branch does not contain the optional
+local-player work. Use the following **instead** of the command above. `--yes`
+accepts the trusted-repository prompt and leaves the clone disabled while its
+branch is selected:
+
+```sh
+omarchy plugin add https://github.com/luckycold/omarchy.music-assistant.git --yes
+plugin_dir="$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant"
+git -C "$plugin_dir" switch --track origin/feature/remote-local-playback
+omarchy plugin validate "$plugin_dir"
+```
+
+Then configure the plugin below and enable it with
+`omarchy plugin enable io.github.manologarciadev.music-assistant`.
+For laptop playback, also install the separate helper as described below;
+cloning/enabling the QML plugin alone does not install the audio runtime.
 
 1. In Music Assistant go to **Settings → Profile** and create a long-lived
    access token.
@@ -140,10 +157,10 @@ Add to the bar layout in `~/.config/omarchy/shell.json`:
 - Right-click: open popup
 - Wheel: previous / next
 - Right-click popup tabs:
-  - **Now** — now-playing card, transport, volume slider
+  - **Now** — now-playing card, transport, volume slider, then the queue
+    with click-to-play and right-click-to-remove
   - **Players** — every MA player; click to transfer the current queue,
     right-click to toggle mute
-  - **Queue** — current queue with click-to-play and right-click-to-remove
   - **Search** — text search across tracks/albums/artists/playlists, click
     a result to play it on the active player
   - **Favorites** — browse and play liked items; right-click to remove

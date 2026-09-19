@@ -6,13 +6,11 @@ Python bindings are `python-dbus` and `python-gobject`. Run as the desktop user,
 **not root**.
 
 ```sh
-cd local-player
-npm ci
-npm run check
+cd "$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/local-player"
 ./install.sh
 ```
 
-Installer builds/tests, installs bundles outside the watched plugin tree to
+The installer runs `npm ci` and `npm run check` itself, then installs bundles outside the watched plugin tree to
 `~/.local/share/omarchy-ma-player`, installs `~/.local/bin/omarchy-ma-player`
 and the `omarchy-ma-player.service` / `omarchy-ma-mpris.service` user units,
 and reloads systemd. The player starts its MPRIS companion as a dependency.
