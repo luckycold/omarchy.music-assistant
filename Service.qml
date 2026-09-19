@@ -1116,6 +1116,36 @@ Item {
     root.actionForPlayer(pid, "players/cmd/power", { powered: !!on })
   }
 
+  function parseLibraryUri(uri) {
+    var match = /^library:\/\/(track|album|artist|playlist|radio|audiobook|podcast)\/([0-9]+)$/.exec(String(uri || ""))
+    return match ? { media_type: match[1], library_item_id: match[2] } : null
+  }
+
+  function favoriteLibraryRef(media) {
+    if (!media) return null
+    var parsed = root.parseLibraryUri(media.uri)
+    if (parsed) return parsed
+    var buckets = [["tracks", "track"], ["albums", "album"], ["artists", "artist"], ["playlists", "playlist"], ["radio", "radio"]]
+    for (var b = 0; b < buckets.length; b++) {
+      var items = root.favorites && root.favorites[buckets[b][0]] ? root.favorites[buckets[b][0]] : []
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i]
+        if (!it) continue
+        var sameUri = media.uri && it.uri === media.uri
+        var sameId = media.item_id && it.item_id && String(it.item_id) === String(media.item_id)
+        var sameTrack = buckets[b][1] === "track" && media.name && it.name === media.name && (media.artist || "") === (it.artist || "")
+        if (!sameUri && !sameId && !sameTrack) continue
+        parsed = root.parseLibraryUri(it.uri)
+        if (parsed) return parsed
+        if (it.item_id && /^[0-9]+$/.test(String(it.item_id)))
+          return { media_type: buckets[b][1], library_item_id: String(it.item_id) }
+      }
+    }
+    if (media.item_id && /^[0-9]+$/.test(String(media.item_id)))
+      return { media_type: "track", library_item_id: String(media.item_id) }
+    return null
+  }
+
   function addFavorite(uri) {
     if (!uri) return
     root.actionForSourceTarget("music/favorites/add_item", { item: uri })
@@ -1124,17 +1154,23 @@ Item {
 
   function removeFavorite(uri) {
     if (!uri) return
-    var match = /^library:\/\/(track|album|artist|playlist|radio|audiobook|podcast)\/([0-9]+)$/.exec(String(uri))
-    if (!match) { root.lastError = "FAVORITE_REQUIRES_LIBRARY_ITEM"; return }
-    root.actionForSourceTarget("music/favorites/remove_item", { media_type: match[1], library_item_id: match[2] })
+    var ref = root.parseLibraryUri(uri)
+    if (!ref) ref = root.favoriteLibraryRef(root.activeMedia && root.activeMedia.uri === uri ? root.activeMedia : { uri: uri })
+    if (!ref) { root.lastError = "FAVORITE_REQUIRES_LIBRARY_ITEM"; return }
+    root.actionForSourceTarget("music/favorites/remove_item", { media_type: ref.media_type, library_item_id: ref.library_item_id })
     root.refreshFavorites()
   }
 
   function favoriteCurrent() {
     var m = root.activeMedia
     if (!m || !m.uri) return
-    root.addFavorite(m.uri)
-    root.showOsd("Favorited", "favorite", MaApi.trackTitle(m))
+    if (root.isFavorite) {
+      root.removeFavorite(m.uri)
+      root.showOsd("Unfavorited", "favorite", MaApi.trackTitle(m))
+    } else {
+      root.addFavorite(m.uri)
+      root.showOsd("Favorited", "favorite", MaApi.trackTitle(m))
+    }
   }
 
   function webUiUrl() {

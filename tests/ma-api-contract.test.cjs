@@ -77,3 +77,36 @@ test('actions stay gated until connected and refresh when they complete', () => 
   assert.equal(run('player_queues/pause', {queue_id: 'group'}), true);
   assert.equal(calls[0].command, 'player_queues/pause');
 });
+
+test('favoriteCurrent removes a library track instead of adding again', () => {
+  const {root, calls} = harness();
+  root.activeMedia = {uri: 'library://track/9', title: 'Song'};
+  root.isFavorite = true;
+  root.lastError = '';
+  root.showOsd = () => {};
+  root.refreshFavorites = () => {};
+  root.actionForSourceTarget = (command, args) => root.runAction(command, args);
+  root.parseLibraryUri = method('parseLibraryUri', root);
+  root.favoriteLibraryRef = method('favoriteLibraryRef', root);
+  root.addFavorite = method('addFavorite', root);
+  root.removeFavorite = method('removeFavorite', root);
+  method('favoriteCurrent', root)();
+  assert.equal(calls[0].command, 'music/favorites/remove_item');
+  assert.equal(JSON.stringify(calls[0].args), JSON.stringify({media_type: 'track', library_item_id: '9'}));
+});
+
+test('favoriteCurrent adds when the track is not a favorite', () => {
+  const {root, calls} = harness();
+  root.activeMedia = {uri: 'library://track/9', title: 'Song'};
+  root.isFavorite = false;
+  root.showOsd = () => {};
+  root.refreshFavorites = () => {};
+  root.actionForSourceTarget = (command, args) => root.runAction(command, args);
+  root.parseLibraryUri = method('parseLibraryUri', root);
+  root.favoriteLibraryRef = method('favoriteLibraryRef', root);
+  root.addFavorite = method('addFavorite', root);
+  root.removeFavorite = method('removeFavorite', root);
+  method('favoriteCurrent', root)();
+  assert.equal(calls[0].command, 'music/favorites/add_item');
+  assert.equal(calls[0].args.item, 'library://track/9');
+});
