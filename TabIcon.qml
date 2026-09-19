@@ -15,8 +15,8 @@ BorderSurface {
 
   signal clicked()
 
-  width: Style.space(36)
-  height: Style.space(36)
+  width: parent ? parent.width : Style.space(56)
+  height: tabInner.implicitHeight + Style.space(10)
   radius: Style.spacing.labelGap
   color: active
     ? Style.selectedFillFor(bar.foreground, Color.accent)
@@ -26,6 +26,7 @@ BorderSurface {
     : Border.none()
 
   Column {
+    id: tabInner
     anchors.centerIn: parent
     spacing: 1
     Text {

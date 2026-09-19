@@ -213,7 +213,7 @@ BarWidget {
 
         Column {
           id: sidebar
-          width: Style.space(48)
+          width: Style.space(56)
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           spacing: Style.space(4)
@@ -241,7 +241,7 @@ BarWidget {
   
         Item {
           id: popupColumn
-          width: parent.width - Style.space(56)
+          width: parent.width - sidebar.width - parent.spacing
           height: parent.height
           clip: true
 
@@ -526,7 +526,7 @@ BarWidget {
                 Item {
                   id: queuePane
                   width: parent.width
-                  height: Math.max(Style.space(72), popupColumn.height - nowPlayer.implicitHeight - queueHeader.implicitHeight - Style.space(24) - contentColumn.spacing - Style.space(8))
+                  height: Math.max(Style.space(72), popupColumn.height - nowPlayer.implicitHeight - queueHeader.implicitHeight - contentColumn.spacing - Style.space(8))
 
                 ScrollView {
                   id: queueFlick
@@ -637,37 +637,6 @@ BarWidget {
                 }
                   }
                 }
-                }
-                Item {
-                  id: queueFooter
-                  width: parent.width
-                  height: Style.space(24)
-                  Rectangle {
-                    id: expandQueueBtn
-                    width: Style.space(20)
-                    height: Style.space(20)
-                    radius: width / 2
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.55)
-                    border.width: 1
-                    border.color: root.bar.foreground
-                    Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
-                    Text {
-                      anchors.centerIn: parent
-                      textFormat: Text.PlainText
-                      text: root.queueExpanded ? "󰅃" : "󰅀"
-                      color: root.bar.foreground
-                      font.family: root.bar.fontFamily
-                      font.pixelSize: Style.font.caption
-                    }
-                    MouseArea {
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: root.queueExpanded = !root.queueExpanded
-                    }
-                  }
                 }
               }
 
@@ -1056,6 +1025,38 @@ BarWidget {
             }
           }
         }
+    }
+
+    Rectangle {
+      id: expandQueueBtn
+      visible: root.popupOpen && root.popupSection === "now"
+      z: 10
+      height: Style.space(18)
+      radius: height / 2
+      anchors.left: popupRow.left
+      anchors.right: popupRow.right
+      anchors.bottom: popupRow.bottom
+      anchors.leftMargin: Style.space(8)
+      anchors.rightMargin: Style.space(8)
+      anchors.bottomMargin: 4
+      color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.55)
+      border.width: 1
+      border.color: root.bar.foreground
+      Accessible.name: root.queueExpanded ? "Collapse queue" : "Expand queue"
+      Text {
+        anchors.centerIn: parent
+        textFormat: Text.PlainText
+        text: root.queueExpanded ? "󰅃" : "󰅀"
+        color: root.bar.foreground
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+      MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.queueExpanded = !root.queueExpanded
+      }
     }
   }
 }
