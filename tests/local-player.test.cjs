@@ -59,13 +59,41 @@ test('play on this device refuses without a Remote ID', () => {
   assert.equal(method('playOnThisDevice', root)(), 'LOCAL_PLAYER_NEEDS_REMOTE_ID');
 });
 
-test('play on this device installs when the helper is missing', () => {
+test('Install Sendspin runs the installer when a Remote ID is already saved', () => {
   let installs = 0;
-  const root = {ready: true, localControlBusy: false, helperInstalled: false, localPlayerEnabled: false,
+  const root = {ready: true, localControlBusy: false, helperInstalled: false,
     config: {localPlayer: {remoteId: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'}}, requestFailed() {},
-    startInstaller: () => { installs++; return 'ok'; }, startLocalPlayer() { assert.fail('started'); }};
-  assert.equal(method('playOnThisDevice', root)(), 'ok');
+    startInstaller: () => { installs++; return 'ok'; },
+    fetchRemoteAccessThenInstall() { assert.fail('fetched'); }};
+  assert.equal(method('installSendspin', root)(), 'ok');
   assert.equal(installs, 1);
+});
+
+test('Install Sendspin fetches remote access when no Remote ID is saved', () => {
+  let fetched = 0;
+  const root = {ready: true, localControlBusy: false, helperInstalled: false,
+    config: {localPlayer: {remoteId: ''}}, requestFailed() {},
+    startInstaller() { assert.fail('installed'); },
+    fetchRemoteAccessThenInstall: () => { fetched++; return 'ok'; }};
+  assert.equal(method('installSendspin', root)(), 'ok');
+  assert.equal(fetched, 1);
+});
+
+test('remote access info saves a Remote ID without enabling the helper', () => {
+  const saved = [];
+  const root = {config: {token: 'SECRET', localPlayer: {enabled: false, remoteId: '', signalingUrl: 'wss://signaling.music-assistant.io/ws', name: 'This device'}},
+    persistConfig() { saved.push(JSON.parse(JSON.stringify(root.config))); }};
+  assert.equal(method('applyRemoteAccessInfo', root)({enabled: true, remote_id: 'AAAAAAAAAAAAAAAAAAAAAAAAAA', signaling_url: 'wss://signaling.music-assistant.io/ws'}), '');
+  assert.equal(root.config.localPlayer.remoteId, 'AAAAAAAAAAAAAAAAAAAAAAAAAA');
+  assert.equal(root.config.localPlayer.enabled, false);
+  assert.equal(saved.length, 1);
+  assert.ok(!JSON.stringify(saved[0]).includes('undefined'));
+});
+
+test('remote access info rejects disabled or invalid ids', () => {
+  const root = {config: {localPlayer: {remoteId: ''}}, persistConfig() { assert.fail('saved'); }};
+  assert.equal(method('applyRemoteAccessInfo', root)({enabled: false, remote_id: 'AAAAAAAAAAAAAAAAAAAAAAAAAA'}), 'REMOTE_ACCESS_DISABLED');
+  assert.equal(method('applyRemoteAccessInfo', root)({enabled: true, remote_id: 'nope'}), 'REMOTE_ACCESS_INVALID');
 });
 
 test('web UI opens https URLs with the browser launcher and ignores tokens', () => {

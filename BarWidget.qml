@@ -343,8 +343,17 @@ BarWidget {
                     width: parent.width
                     spacing: Style.space(4)
                     Button {
+                      text: "Install Sendspin"
+                      foreground: root.bar.foreground
+                      visible: root.service && !root.service.helperInstalled
+                      enabled: root.serviceReady && !root.service.localControlBusy && !root.service.playHerePending
+                      opacity: enabled ? 1 : 0.4
+                      onClicked: root.service.installSendspin()
+                    }
+                    Button {
                       text: "Play on this device"
                       foreground: root.bar.foreground
+                      visible: root.service && root.service.helperInstalled
                       enabled: root.serviceReady && !root.service.localControlBusy && !root.service.playHerePending
                       opacity: enabled ? 1 : 0.4
                       onClicked: root.service.playOnThisDevice()
@@ -377,9 +386,9 @@ BarWidget {
                   Text {
                     textFormat: Text.PlainText
                     width: parent.width
-                    text: root.service && root.service.localPlayerEnabled
+                    text: root.service && root.service.helperInstalled
                       ? "Play on this device selects this machine without moving another queue."
-                      : "Installs the helper if needed, then plays on this device."
+                      : "Install the Sendspin client to play on this device."
                     wrapMode: Text.WordWrap
                     color: Qt.darker(root.bar.foreground, 1.4)
                     font.family: root.bar.fontFamily

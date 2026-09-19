@@ -176,6 +176,42 @@ Item {
     return root.startInstaller()
   }
 
+  function installSendspin() {
+    if (!root.ready) return "NOT_READY"
+    if (root.localControlBusy) return "LOCAL_PLAYER_BUSY"
+    if (root.helperInstalled) return root.playOnThisDevice()
+    root.playHerePending = true
+    root.requestFailed("")
+    var lp = root.config.localPlayer || {}
+    if (lp.remoteId) return root.startInstaller()
+    return root.fetchRemoteAccessThenInstall()
+  }
+
+  function applyRemoteAccessInfo(info) {
+    if (!info || typeof info !== "object") return "REMOTE_ACCESS_UNAVAILABLE"
+    if (info.enabled !== true) return "REMOTE_ACCESS_DISABLED"
+    var id = String(info.remote_id || "").replace(/-/g, "")
+    if (!/^[A-Z3-79]{25}[AEIMQUY4]$/.test(id)) return "REMOTE_ACCESS_INVALID"
+    var signaling = String(info.signaling_url || "wss://signaling.music-assistant.io/ws")
+    if (!/^wss:\/\/[^\s@?#]+(?:\/[^\s?#]*)?$/.test(signaling)) return "REMOTE_ACCESS_INVALID"
+    var next = JSON.parse(JSON.stringify(root.config))
+    if (!next.localPlayer) next.localPlayer = ({ enabled: false, remoteId: "", signalingUrl: signaling, name: "This device", forceRelay: false })
+    next.localPlayer.remoteId = id
+    next.localPlayer.signalingUrl = signaling
+    if (!next.localPlayer.name) next.localPlayer.name = "This device"
+    next.localPlayer.enabled = false
+    root.config = next
+    root.persistConfig()
+    return ""
+  }
+
+  function fetchRemoteAccessThenInstall() {
+    if (remoteAccessProc.busy) return "REQUEST_BUSY"
+    var payload = root.buildRequest("remote_access/info", {}, "remote-access")
+    if (!root.runMaRequest(remoteAccessProc, payload)) return "NOT_READY"
+    return "ok"
+  }
+
   function enableAndStartLocalPlayer() {
     if (!root.config.localPlayer) return "LOCAL_PLAYER_DISABLED"
     var next = JSON.parse(JSON.stringify(root.config))
@@ -230,6 +266,24 @@ Item {
       }
       root.helperInstalled = true
       root.enableAndStartLocalPlayer()
+    }
+  }
+  MaRequest {
+    id: remoteAccessProc
+    handleReply: function(value, context) {
+      var err = root.applyRemoteAccessInfo(value)
+      if (err) {
+        root.playHerePending = false
+        root.requestFailed(err)
+        return
+      }
+      root.startInstaller()
+    }
+    onCompleted: function(code, status, context) {
+      if (code !== 0) {
+        root.playHerePending = false
+        root.requestFailed("REMOTE_ACCESS_UNAVAILABLE")
+      }
     }
   }
   Timer {
@@ -1237,6 +1291,7 @@ Item {
     function restartLocalPlayer(): string { return root.restartLocalPlayer() }
     function playHere(): string { return root.playHere() }
     function playOnThisDevice(): string { return root.playOnThisDevice() }
+    function installSendspin(): string { return root.installSendspin() }
     function enableLocalPlayer(): string { return root.enableLocalPlayer() }
     function disableLocalPlayer(): string { return root.disableLocalPlayer() }
 

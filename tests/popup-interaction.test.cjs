@@ -47,6 +47,9 @@ test('Now pins the player and gives the queue its own scroll view', () => {
   assert.match(source, /KeyboardPanel\s*\{/);
   assert.match(source, /text: "Play on this device"/);
   assert.match(source, /onClicked: root\.service\.playOnThisDevice\(\)/);
+  assert.match(source, /text: "Install Sendspin"/);
+  assert.match(source, /onClicked: root\.service\.installSendspin\(\)/);
+  assert.match(source, /!root\.service\.helperInstalled/);
   assert.match(source, /isFavorite: root\.service \? root\.service\.isFavorite : false/);
   assert.match(queue, /HoverMarquee/);
   assert.match(queue, /hoverEnabled: true/);

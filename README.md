@@ -50,9 +50,11 @@ cd "$HOME/.config/omarchy/plugins/io.github.manologarciadev.music-assistant/loca
 
 The installer creates a private venv, installs the native Sendspin helper
 outside the plugin directory, and registers its user services. From the plugin,
-**Players → Play on this device** runs this installer if needed, enables the
-helper, and selects this machine. `./install.sh` still does not start playback
-by itself. Add these settings to your private config, retaining `token`:
+**Players → Install Sendspin** is the first-time path: it can read Remote Access
+from the server, run the installer, enable the helper, and select this machine.
+**Play on this device** appears after the helper is installed. `./install.sh`
+still does not start playback by itself. Add these settings to your private
+config if you already have a Remote ID, retaining `token`:
 
 ```json
 {
@@ -80,9 +82,10 @@ omarchy-ma-player status   # wait for ready: true
 omarchy-ma-player enable
 ```
 
-**Players → Play on this device** installs the helper if needed, then
-starts/selects this machine without transferring or starting another player's
-queue. Start/Stop/Restart manage an already-installed helper.
+**Players → Install Sendspin** installs the helper from the widget.
+**Play on this device** then starts/selects this machine without transferring
+or starting another player's queue. Start/Stop/Restart manage an
+already-installed helper.
 All MA requests use its authenticated remote session, without LAN fallback.
 Audio uses native Sendspin over a Music Assistant Remote ID; it does not run
 scripts from the MA server. Readiness confirms connectivity, not audible output.
@@ -163,7 +166,8 @@ other shell components (or external scripts) can call it:
 | `localPlayerStatus()` | Helper phase, readiness and safe error status |
 | `startLocalPlayer()` / `stopLocalPlayer()` / `restartLocalPlayer()` | Helper lifecycle |
 | `playHere()` | Start if needed and select this device |
-| `playOnThisDevice()` | Install helper if needed, enable it, then play here |
+| `installSendspin()` | Fetch Remote Access if needed, install helper, then play here |
+| `playOnThisDevice()` | Enable/start helper if installed, then play here |
 | `enableLocalPlayer()` / `disableLocalPlayer()` | Enable/disable autostart, not current playback |
 
 Lifecycle calls acknowledge an asynchronous action; check status for readiness.
