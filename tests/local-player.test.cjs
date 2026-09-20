@@ -57,6 +57,15 @@ test('stopped helper does not wipe LAN-backed players', () => {
   assert.equal(refreshed, 1);
 });
 
+test('LAN curl script is a single bash -c argument', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../MaApi.js'), 'utf8').replace('.pragma library', ''), ctx);
+  const payload = ctx.buildArgs('https://ma.example', 'SECRET', 'players/all', {});
+  assert.equal(payload.script.includes('\n'), false);
+  assert.match(payload.script, /curl -sS/);
+  assert.doesNotMatch(payload.script, /SECRET/);
+});
+
 test('controller-only requests keep the token on stdin', () => {
   const payload = method('buildRequest', {localPlayerEnabled: false, requestEpoch: 1, config: oldConfig},
     {MaApi: {buildArgs: () => ({script: 'curl script', token: 'SECRET'})}, Quickshell: {env: () => ''}})('players/all', {});

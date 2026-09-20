@@ -26,6 +26,17 @@ function harness() {
   return {root, calls};
 }
 
+test('HTTP players/all can be a bare array', () => {
+  const decode = method('decodeReply', {});
+  const players = [{player_id: 'speaker', name: 'Kitchen', available: true}];
+  assert.equal(JSON.stringify(decode(JSON.stringify(players), 0, false)), JSON.stringify(players));
+  assert.equal(JSON.stringify(decode(JSON.stringify({result: players}), 0, true)), JSON.stringify(players));
+  assert.throws(() => decode(JSON.stringify(players), 0, true), /INVALID_HELPER_REPLY/);
+  assert.equal(decode('null', 0, false), null);
+  assert.throws(() => decode('', 0, false), /MA_EMPTY_REPLY/);
+  assert.throws(() => decode('{"error":"nope"}', 0, false), /MA_API_ERROR/);
+});
+
 test('unresolved local identity fails closed for MPRIS', () => {
   const root = {localPlayerEnabled: true, localPlayerId: '', localPlayerSelected: false, config: {}};
   const route = method('mprisRoutingEnabled', root);

@@ -722,7 +722,7 @@ Item {
         } catch (e) {
           code = code || -1
           if (!(current.statusOnly && root.hasLanApi()))
-            root.requestFailed(current.local ? "HELPER_REQUEST_FAILED" : "MA_REQUEST_FAILED")
+            root.requestFailed(current.local ? "HELPER_REQUEST_FAILED" : ((e && e.message) || "MA_REQUEST_FAILED"))
         }
       }
       // Obsolete completion handlers must not overwrite a new session's state.
@@ -769,12 +769,25 @@ Item {
   }
 
   function decodeReply(text, code, local) {
-    if (code !== 0 || !text || text.length > MaApi.MAX_RESPONSE_BYTES) throw new Error("REQUEST_FAILED")
-    var payload = JSON.parse(String(text))
-    if (payload === null || payload === undefined || payload.error || payload.error_code) throw new Error("REQUEST_FAILED")
-    var wrapped = Object.prototype.hasOwnProperty.call(payload, "result")
-    if (local && !wrapped) throw new Error("INVALID_HELPER_REPLY")
-    return wrapped ? payload.result : payload
+    if (code !== 0) throw new Error("MA_HTTP_EXIT")
+    if (!text) throw new Error("MA_EMPTY_REPLY")
+    if (text.length > MaApi.MAX_RESPONSE_BYTES) throw new Error("MA_REPLY_TOO_LARGE")
+    var payload
+    try { payload = JSON.parse(String(text)) } catch (e) { throw new Error("MA_DECODE_FAILED") }
+    // HTTP returns bare JSON, including `null` for an empty queue. That is a
+    // valid result; treating it as failure wiped the player list after poll.
+    if (payload === null || payload === undefined) return payload
+    // The HTTP API returns a bare array; do not probe .error on it. QML/JS
+    // property access and hasOwnProperty.call are not safe on arrays here.
+    if (Array.isArray(payload)) {
+      if (local) throw new Error("INVALID_HELPER_REPLY")
+      return payload
+    }
+    if (typeof payload !== "object") throw new Error("MA_DECODE_FAILED")
+    if (payload.error || payload.error_code) throw new Error("MA_API_ERROR")
+    if (Object.prototype.hasOwnProperty.call(payload, "result")) return payload.result
+    if (local) throw new Error("INVALID_HELPER_REPLY")
+    return payload
   }
 
   function runFetchPlayers() {

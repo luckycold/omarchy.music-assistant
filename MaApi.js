@@ -62,17 +62,19 @@ function safeImageUrl(v, maxLen) {
 function _buildCurlScript(url, bodyJson, maxTime, includeOutput) {
   var escapedUrl = url.replace(/'/g, "'\\''")
   var escapedBody = bodyJson.replace(/'/g, "'\\''")
-  return "set -e\n" +
-    "F=$(mktemp -t ma-auth.XXXXXX)\n" +
-    "chmod 600 \"$F\"\n" +
-    "trap 'rm -f \"$F\"' EXIT\n" +
-    "IFS= read -r token\n" +
-    "printf '%s' \"Authorization: Bearer ${token}\" > \"$F\"\n" +
+  // One line: Quickshell Process.command can drop everything after the first
+  // newline in bash -c, which left only `set -e` and an empty successful reply.
+  return "set -e; " +
+    "F=$(mktemp -t ma-auth.XXXXXX); " +
+    "chmod 600 \"$F\"; " +
+    "trap 'rm -f \"$F\"' EXIT; " +
+    "IFS= read -r token; " +
+    "printf '%s' \"Authorization: Bearer ${token}\" > \"$F\"; " +
     "curl -sS --max-time " + maxTime + " --max-filesize " + MAX_RESPONSE_BYTES + " -X POST " +
     "-H 'Content-Type: application/json' -H '@'\"$F\" " +
     (includeOutput ? "" : "-o /dev/null ") +
     "'" + escapedUrl + "/api' " +
-    "-d '" + escapedBody + "'\n"
+    "-d '" + escapedBody + "'"
 }
 
 function buildArgs(url, token, command, args, messageId) {
