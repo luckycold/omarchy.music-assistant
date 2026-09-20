@@ -79,12 +79,7 @@ Item {
   MaRequest {
     id: localStatusProc
     handleReply: function(value, context) {
-      var wasReady = root.localPlayerReady
-      root.localPlayerState = value
-      if (value.playerId) root.localPlayerId = value.playerId
-      if (!value.ready && (wasReady || root.connected)) root.requestFailed("LOCAL_PLAYER_NOT_READY")
-      if (value.ready && !wasReady) root.refreshState()
-      root.selectLocalPlayer()
+      root.applyLocalStatus(value)
     }
     onCompleted: function(code, status, context) {
       if (code !== 0) {
@@ -296,6 +291,22 @@ Item {
       root.localPlayerState = ({ phase: "error", ready: false, playing: false, error: "LOCAL_INSTALL_TIMEOUT" })
       root.requestFailed("LOCAL_INSTALL_TIMEOUT")
     }
+  }
+
+  function hasLanApi() {
+    return !!(root.config && root.config.url && root.config.token)
+  }
+
+  function applyLocalStatus(value) {
+    var wasReady = root.localPlayerReady
+    var lan = root.hasLanApi()
+    root.localPlayerState = value
+    if (value.playerId) root.localPlayerId = value.playerId
+    // A stopped helper must not wipe LAN-backed players. Remote-only setups
+    // still fail closed because there is no other transport.
+    if (!value.ready && (wasReady || root.connected) && !lan) root.requestFailed("LOCAL_PLAYER_NOT_READY")
+    if ((value.ready && !wasReady) || (wasReady && !value.ready && lan)) root.refreshState()
+    root.selectLocalPlayer()
   }
 
   function selectLocalPlayer() {
@@ -604,16 +615,18 @@ Item {
   }
 
   function refreshState() {
-    if (!root.ready || (root.localPlayerEnabled && (!root.localPlayerReady || root.localControlBusy))) return
+    if (!root.ready) return
+    if (root.localPlayerEnabled && (!root.localPlayerReady || root.localControlBusy) && !root.hasLanApi()) return
     if (root.pollInFlight || playersProc.busy || activeQueueProc.busy || queueProc.busy) return
     root.pollInFlight = true
     root.runFetchPlayers()
   }
 
-  // Every RPC, including library flows, must share the helper's authenticated
-  // browser session. Never fall back to HTTP when local playback is enabled.
+  // Use the helper's authenticated remote session while it is ready. Fall back
+  // to the configured LAN API so other players stay listed when this device is
+  // stopped. Remote-only configs still have no LAN path.
   function buildRequest(command, args, messageId) {
-    if (root.localPlayerEnabled) {
+    if (root.localPlayerEnabled && root.localPlayerReady && !root.localControlBusy) {
       return { command: [root.localPlayerExecutable, "request"],
         stdin: JSON.stringify({ command: command, args: args || {} }) + "\n",
         local: true, epoch: root.requestEpoch }
@@ -625,7 +638,7 @@ Item {
 
   function runMaRequest(proc, payload) {
     if (!root.ready || !payload) return false
-    if (root.localPlayerEnabled && (!root.localPlayerReady || root.localControlBusy)) {
+    if (root.localPlayerEnabled && (!root.localPlayerReady || root.localControlBusy) && !root.hasLanApi()) {
       root.pollInFlight = false
       root.lastError = "LOCAL_PLAYER_NOT_READY"
       return false
@@ -708,7 +721,8 @@ Item {
           if (typeof handleReply === "function") handleReply(value, current.context || {})
         } catch (e) {
           code = code || -1
-          root.requestFailed(current.local ? "HELPER_REQUEST_FAILED" : "MA_REQUEST_FAILED")
+          if (!(current.statusOnly && root.hasLanApi()))
+            root.requestFailed(current.local ? "HELPER_REQUEST_FAILED" : "MA_REQUEST_FAILED")
         }
       }
       // Obsolete completion handlers must not overwrite a new session's state.

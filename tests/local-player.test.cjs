@@ -23,10 +23,38 @@ test('local player defaults off; remote-only config needs a valid Remote ID', ()
 });
 
 test('remote requests never put secrets or LAN URLs on argv', () => {
-  const root = {localPlayerEnabled: true, localPlayerExecutable: '/home/test/.local/bin/omarchy-ma-player', requestEpoch: 7, config: oldConfig};
+  const root = {localPlayerEnabled: true, localPlayerReady: true, localControlBusy: false,
+    localPlayerExecutable: '/home/test/.local/bin/omarchy-ma-player', requestEpoch: 7, config: oldConfig};
   const payload = method('buildRequest', root, {MaApi: {buildArgs() { assert.fail('LAN fallback'); }}})('music/search', {search_query: 'q'}, 'search');
   assert.equal(JSON.stringify(payload.command), JSON.stringify([root.localPlayerExecutable, 'request']));
   assert.equal(payload.stdin, JSON.stringify({command: 'music/search', args: {search_query: 'q'}}) + '\n');
+});
+
+test('stopped helper lists players over the LAN API', () => {
+  const root = {localPlayerEnabled: true, localPlayerReady: false, localControlBusy: false,
+    requestEpoch: 1, config: oldConfig,
+    hasLanApi() { return !!(root.config && root.config.url && root.config.token); }};
+  const payload = method('buildRequest', root, {MaApi: {buildArgs: () => ({script: 'curl script', token: 'SECRET'})},
+    Quickshell: {env: () => ''}})('players/all', {});
+  assert.equal(payload.local, false);
+  assert.equal(payload.stdin, 'SECRET\n');
+  let calls = 0;
+  root.ready = true;
+  assert.equal(method('runMaRequest', root)({enqueue() { calls++; return true; }}, payload), true);
+  assert.equal(calls, 1);
+});
+
+test('stopped helper does not wipe LAN-backed players', () => {
+  let refreshed = 0;
+  const root = {localPlayerEnabled: true, localPlayerReady: true, connected: true, localPlayerId: '',
+    config: oldConfig, players: [{player_id: 'speaker'}], lastError: '',
+    hasLanApi() { return true; },
+    requestFailed() { assert.fail('wiped LAN players'); },
+    refreshState() { refreshed++; },
+    selectLocalPlayer() {}};
+  method('applyLocalStatus', root)({phase: 'stopped', ready: false, playerId: '', playing: false, error: ''});
+  assert.equal(root.localPlayerState.ready, false);
+  assert.equal(refreshed, 1);
 });
 
 test('controller-only requests keep the token on stdin', () => {
@@ -41,6 +69,16 @@ test('helper failure clears in-flight state', () => {
   assert.equal(root.connected, false);
   assert.equal(root.players.length, 0);
   assert.equal(root.requestEpoch, 3);
+});
+
+test('polls over LAN when the helper is stopped', () => {
+  let fetched = 0;
+  const root = {ready: true, localPlayerEnabled: true, localPlayerReady: false, localControlBusy: false,
+    pollInFlight: false, config: oldConfig, hasLanApi() { return true; },
+    runFetchPlayers() { fetched++; }};
+  method('refreshState', root, {playersProc: {busy: false}, activeQueueProc: {busy: false}, queueProc: {busy: false}})();
+  assert.equal(fetched, 1);
+  assert.equal(root.pollInFlight, true);
 });
 
 test('play here selects this device without transferring a queue', () => {
@@ -129,7 +167,8 @@ test('config saves put credentials on stdin', () => {
 });
 
 test('unready helper never falls back to LAN and hung requests do not succeed', () => {
-  const root = {ready: true, localPlayerEnabled: true, localPlayerReady: false};
+  const root = {ready: true, localPlayerEnabled: true, localPlayerReady: false, localControlBusy: false,
+    config: {token: 'SECRET'}, hasLanApi() { return false; }};
   let calls = 0;
   assert.equal(method('runMaRequest', root)({enqueue() { calls++; }}, {command: ['request']}), false);
   assert.equal(calls, 0);
